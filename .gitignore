@@ -3,3 +3,11 @@ __pycache__/
 *.pyc
 .DS_Store
 .streamlit/secrets.toml
+
+# planning docs - not part of the public portfolio repo
+BUILD-PLAN.md
+build-plan-prompt.md
+codex-brief-paint-lut.md
+debug-log.md
+paint-lut-spec.md
+v2.md
