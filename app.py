@@ -1,6 +1,7 @@
 import io
 import time
 
+import anthropic
 import cv2
 import numpy as np
 import PIL
@@ -74,3 +75,28 @@ if uploaded_file is not None:
             f"{rgb_array.shape[1]}×{rgb_array.shape[0]} px "
             f"· processed in {elapsed:.2f}s"
         )
+
+st.divider()
+st.subheader("Model connection test")
+
+if st.button("Ask Claude something"):
+    with st.spinner("Asking Claude..."):
+        try:
+            client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+            response = client.messages.create(
+                model="claude-sonnet-5",
+                max_tokens=200,
+                thinking={"type": "disabled"},
+                messages=[{
+                    "role": "user",
+                    "content": "In one sentence, what is underpainting in traditional oil painting?",
+                }],
+            )
+            reply = next(b.text for b in response.content if b.type == "text")
+            st.write(reply)
+        except anthropic.AuthenticationError:
+            st.error("Invalid API key. Check the secret in Streamlit Cloud settings.")
+        except anthropic.APIStatusError as e:
+            st.error(f"API error: {e.message}")
+        except anthropic.APIConnectionError:
+            st.error("Couldn't reach the API. Check your internet connection.")
