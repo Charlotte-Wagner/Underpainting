@@ -4,6 +4,9 @@ __pycache__/
 .DS_Store
 .streamlit/secrets.toml
 
+# local coding-tool config, contains machine-specific paths
+.claude/
+
 # planning docs - not part of the public portfolio repo
 BUILD-PLAN.md
 build-plan-prompt.md
