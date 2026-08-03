@@ -1,49 +1,26 @@
-import io
 import time
 
 import anthropic
 import cv2
 import numpy as np
-import PIL
 import pillow_heif
 import streamlit as st
 from PIL import Image, ImageOps
 
+from imaging import posterize
+
 pillow_heif.register_heif_opener()
 
 st.title("Underpainting")
-st.write("Toolchain works. Session 1 done.")
-
-st.subheader("Library versions")
-st.write(f"numpy: {np.__version__}")
-st.write(f"opencv-python-headless: {cv2.__version__}")
-st.write(f"pillow: {PIL.__version__}")
-
-st.subheader("Animated GIF test")
-
-frame_a = np.zeros((100, 100, 3), dtype=np.uint8)
-frame_a[:, :] = (30, 120, 200)
-
-frame_b = cv2.bitwise_not(frame_a)
-
-frames = [Image.fromarray(frame_a), Image.fromarray(frame_b)]
-buffer = io.BytesIO()
-frames[0].save(
-    buffer,
-    format="GIF",
-    save_all=True,
-    append_images=frames[1:],
-    duration=500,
-    loop=0,
-)
-buffer.seek(0)
-
-st.image(buffer.getvalue())
-
-st.divider()
-st.subheader("Upload a photo")
+st.write("Upload a photo and see how a painter would block it in.")
 
 MAX_DIMENSION = 1200
+
+# Hardcoded on purpose. Cut list item 1: no tunable UI, even if on schedule.
+# A curated pair of studies is a better demo than a slider that lets a visitor
+# find the ugliest output the app can produce.
+COARSE_LEVELS = 3
+FINE_LEVELS = 5
 
 uploaded_file = st.file_uploader(
     "Upload a photo", type=["jpg", "jpeg", "png", "heic", "heif"]
@@ -63,6 +40,9 @@ if uploaded_file is not None:
         rgb_array = np.array(image)
         gray_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2GRAY)
 
+        coarse_study = posterize(gray_array, COARSE_LEVELS)
+        fine_study = posterize(gray_array, FINE_LEVELS)
+
         elapsed = time.time() - start
 
         col1, col2 = st.columns(2)
@@ -74,6 +54,23 @@ if uploaded_file is not None:
         st.caption(
             f"{rgb_array.shape[1]}×{rgb_array.shape[0]} px "
             f"· processed in {elapsed:.2f}s"
+        )
+
+        st.markdown("**Value studies**")
+
+        col3, col4 = st.columns(2)
+        with col3:
+            st.image(coarse_study, caption=f"{COARSE_LEVELS}-value study")
+        with col4:
+            st.image(fine_study, caption=f"{FINE_LEVELS}-value study")
+
+        # Verification readout, not polish. Shows the actual values present in
+        # each study on this photo. Fewer than N means the photo has no pixels
+        # in that band, which is information about the photo, not a bug.
+        # Remove in S10.
+        st.caption(
+            f"{COARSE_LEVELS}-value: {np.unique(coarse_study).tolist()} · "
+            f"{FINE_LEVELS}-value: {np.unique(fine_study).tolist()}"
         )
 
 st.divider()
