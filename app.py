@@ -7,7 +7,7 @@ import pillow_heif
 import streamlit as st
 from PIL import Image, ImageOps
 
-from imaging import posterize
+from imaging import extract_palette, posterize
 
 pillow_heif.register_heif_opener()
 
@@ -42,6 +42,7 @@ if uploaded_file is not None:
 
         coarse_study = posterize(gray_array, COARSE_LEVELS)
         fine_study = posterize(gray_array, FINE_LEVELS)
+        palette = extract_palette(rgb_array)
 
         elapsed = time.time() - start
 
@@ -72,6 +73,17 @@ if uploaded_file is not None:
             f"{COARSE_LEVELS}-value: {np.unique(coarse_study).tolist()} · "
             f"{FINE_LEVELS}-value: {np.unique(fine_study).tolist()}"
         )
+
+        st.markdown("**Palette**")
+        st.caption(
+            "Clustered in Lab so the groupings match colors a painter would mix "
+            "as one. Ordered by how much of the canvas each covers."
+        )
+
+        for column, swatch in zip(st.columns(len(palette)), palette):
+            with column:
+                st.image(np.full((90, 200, 3), swatch["rgb"], dtype=np.uint8))
+                st.caption(f"{swatch['hex']}\n\n{swatch['share'] * 100:.1f}%")
 
 st.divider()
 st.subheader("Model connection test")
