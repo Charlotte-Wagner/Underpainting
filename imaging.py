@@ -183,3 +183,127 @@ def extract_palette(rgb, k=PALETTE_SIZE, sample_px=PALETTE_SAMPLE_PX, seed=KMEAN
             }
         )
     return swatches
+
+
+# --------------------------------------------------------------------------
+# Stage generation
+#
+# Four independent views of the same source image, one per axis of
+# information: value count, then color count, then detail, then nothing.
+# Each is computed straight from the untouched rgb array, never from another
+# stage's output. Chaining would compound each stage's own approximation
+# into the next one, and the last stage would drift off the actual photo
+# instead of being it.
+# --------------------------------------------------------------------------
+
+STAGE_VALUE_LEVELS = 3
+STAGE_BLUR_FRACTION = 0.02
+
+
+def value_block_in(rgb, n_levels=STAGE_VALUE_LEVELS):
+    """Stage 1: values only. Grayscale, posterized, put back on 3 channels.
+
+    Reuses posterize at the same n_levels already validated in S5 as the one
+    that reads as connected massing, so this is the same value study, not a
+    new decision.
+    """
+    gray = cv2.cvtColor(np.asarray(rgb, dtype=np.uint8), cv2.COLOR_RGB2GRAY)
+    return cv2.cvtColor(posterize(gray, n_levels), cv2.COLOR_GRAY2RGB)
+
+
+def recolor_to_palette(rgb, palette):
+    """Stage 2: color count only. Every pixel snapped to its nearest palette color.
+
+    Distance is Lab, the same space the palette itself was clustered in, so a
+    pixel lands in the cluster it would have joined had it been part of the
+    k-means input. Matched at full resolution, not the 200px sample the
+    palette was clustered from: the centroids describe the sample, but every
+    full-res pixel still has a well-defined nearest one.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        palette: list of dicts from extract_palette (each needs "lab" and "rgb").
+
+    Returns:
+        uint8 sRGB array (H, W, 3), containing only the palette's own colors.
+    """
+    lab = srgb_to_lab(rgb)
+    height, width = lab.shape[:2]
+    flat = lab.reshape(-1, 3)
+    centers = np.array([p["lab"] for p in palette], dtype=np.float32)
+    colors = np.array([p["rgb"] for p in palette], dtype=np.uint8)
+
+    # One (N,) distance array per center, not one (N, k, 3) array of diffs:
+    # k is small (6) but N is up to a few million pixels, and the (N, k, 3)
+    # version peaks at k times the memory for no benefit.
+    distances = np.stack(
+        [np.linalg.norm(flat - center, axis=1) for center in centers], axis=1
+    )
+    nearest = np.argmin(distances, axis=1)
+    return colors[nearest].reshape(height, width, 3)
+
+
+def soften(rgb, blur_fraction=STAGE_BLUR_FRACTION):
+    """Stage 3: detail only. Gaussian blur scaled to the image's own size.
+
+    A fixed pixel radius means something different on a 400px image than a
+    1200px one. Expressing the radius as a fraction of the long edge keeps
+    the amount of softening visually comparable across photo sizes.
+    """
+    height, width = np.asarray(rgb).shape[:2]
+    long_edge = max(height, width)
+    radius = max(1, int(round(long_edge * blur_fraction)))
+    kernel = radius * 2 + 1  # GaussianBlur requires an odd kernel size.
+    return cv2.GaussianBlur(np.asarray(rgb, dtype=np.uint8), (kernel, kernel), 0)
+
+
+def build_stages(rgb, palette):
+    """The four stages, in build order: values, color masses, soft focus, full detail.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        palette: the same palette extract_palette returned for this rgb, so
+            stage 2 uses the identical clusters shown in the swatches panel.
+
+    Returns:
+        List of 4 uint8 sRGB arrays (H, W, 3), same size as rgb. The last one
+        is rgb itself, unmodified, not a fourth approximation of it.
+    """
+    rgb = np.asarray(rgb, dtype=np.uint8)
+    return [
+        value_block_in(rgb),
+        recolor_to_palette(rgb, palette),
+        soften(rgb),
+        rgb,
+    ]
+
+
+def cross_fade_frames(stages, fade_frames):
+    """Linear cross-fade between each consecutive pair of stages.
+
+    Blended in uint8 RGB, not Lab: an animation frame is a display artifact
+    on its way to a GIF palette, not a color measurement, and Lab would add a
+    round trip through lab_to_srgb for every intermediate frame with nothing
+    visible to show for it.
+
+    Args:
+        stages: list of uint8 RGB arrays, all the same shape.
+        fade_frames: number of interpolated frames generated strictly
+            between each pair (the endpoints are included once each, not
+            repeated at both ends of their neighboring fades).
+
+    Returns:
+        Frames in playback order: stages[0], fade_frames frames toward
+        stages[1], stages[1], fade_frames frames toward stages[2], and so on
+        through stages[-1]. Length is len(stages) + (len(stages) - 1) * fade_frames.
+    """
+    frames = [stages[0]]
+    for i in range(len(stages) - 1):
+        start = stages[i].astype(np.float32)
+        end = stages[i + 1].astype(np.float32)
+        for step in range(1, fade_frames + 1):
+            t = step / (fade_frames + 1)
+            blended = start * (1.0 - t) + end * t
+            frames.append(np.round(blended).astype(np.uint8))
+        frames.append(stages[i + 1])
+    return frames

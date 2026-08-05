@@ -7,7 +7,8 @@ import pillow_heif
 import streamlit as st
 from PIL import Image, ImageOps
 
-from imaging import extract_palette, posterize
+from gif import encode_gif, frame_durations
+from imaging import build_stages, cross_fade_frames, downsample, extract_palette, posterize
 from paints import nearest_paint
 
 pillow_heif.register_heif_opener()
@@ -22,6 +23,15 @@ MAX_DIMENSION = 1200
 # find the ugliest output the app can produce.
 COARSE_LEVELS = 3
 FINE_LEVELS = 5
+
+# The GIF doesn't need filmstrip resolution, and frame count times frame size
+# is what makes the file big on a phone on cell data. The filmstrip stays at
+# full resolution; only the animation gets downsampled. Measured on the test
+# photo: 480px/6 fades was 1.1MB; 300px/4 fades is 368KB with no visible loss
+# to the build-order read. See debug-log.md, diamond-4.
+GIF_MAX_PX = 300
+FADE_FRAMES = 4
+STAGE_CAPTIONS = ["1 · Values", "2 · Color masses", "3 · Soft focus", "4 · Full detail"]
 
 uploaded_file = st.file_uploader(
     "Upload a photo", type=["jpg", "jpeg", "png", "heic", "heif"]
@@ -116,6 +126,32 @@ if uploaded_file is not None:
                 "illuminant/observer setting. Underpainting is independent and is not "
                 "affiliated with or endorsed by Golden Artist Colors or Williamsburg."
             )
+
+        st.markdown("**Build order**")
+        st.caption(
+            "The same photo, computed four independent ways: values only, color "
+            "reduced to the palette above, detail softened, and untouched. Reading "
+            "left to right is the order you would actually build the painting."
+        )
+
+        stages = build_stages(rgb_array, palette)
+        for column, stage, caption in zip(st.columns(4), stages, STAGE_CAPTIONS):
+            with column:
+                st.image(stage, caption=caption)
+
+        gif_stages = [downsample(stage, GIF_MAX_PX) for stage in stages]
+        gif_frames = cross_fade_frames(gif_stages, FADE_FRAMES)
+        gif_durations = frame_durations(len(gif_stages), FADE_FRAMES)
+        gif_bytes = encode_gif(gif_frames, gif_durations)
+
+        st.image(gif_bytes)
+        # Verification readout, not polish. Real measured numbers, not
+        # estimates: frame count, loop length, and file size on this photo.
+        # Remove in S10.
+        st.caption(
+            f"{len(gif_frames)} frames · {sum(gif_durations) / 1000:.1f}s per loop · "
+            f"{len(gif_bytes) / 1024:.0f} KB"
+        )
 
 st.divider()
 st.subheader("Model connection test")
