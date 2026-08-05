@@ -196,8 +196,6 @@ if image_bytes is not None:
             fine_study = posterize(gray_array, FINE_LEVELS)
             palette = extract_palette(rgb_array)
 
-        elapsed = time.time() - start
-
         col1, col2 = st.columns(2)
         with col1:
             st.image(rgb_array, caption=source_caption)
@@ -207,7 +205,13 @@ if image_bytes is not None:
         # Pixel dimensions are noise to a visitor; processing time is a real
         # signal to a technical one ("this ran in a fraction of a second"),
         # so it stays and the dimensions go.
-        st.caption(f"Processed in {elapsed:.2f}s")
+        #
+        # Reserved here and filled in after the GIF, because the honest number
+        # is the one the visitor actually waited through. Timing only as far
+        # as the palette and printing that next to the first image reported
+        # 0.12s of a 0.25s pipeline on the sample photo: a precise-looking
+        # number that was wrong by half, which is worse than no number.
+        timing_caption = st.empty()
 
         st.markdown("**Value studies**")
 
@@ -279,6 +283,8 @@ if image_bytes is not None:
             gif_bytes = encode_gif(gif_frames, gif_durations)
 
         st.image(gif_bytes)
+
+        timing_caption.caption(f"Processed in {time.time() - start:.2f}s")
 
         st.markdown("**Step-by-step guide**")
         st.caption(
