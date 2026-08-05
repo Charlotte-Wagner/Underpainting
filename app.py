@@ -8,6 +8,7 @@ import streamlit as st
 from PIL import Image, ImageOps
 
 from imaging import extract_palette, posterize
+from paints import nearest_paint
 
 pillow_heif.register_heif_opener()
 
@@ -74,16 +75,47 @@ if uploaded_file is not None:
             f"{FINE_LEVELS}-value: {np.unique(fine_study).tolist()}"
         )
 
-        st.markdown("**Palette**")
+        st.markdown("**Palette and closest tube**")
         st.caption(
             "Clustered in Lab so the groupings match colors a painter would mix "
-            "as one. Ordered by how much of the canvas each covers."
+            "as one, ordered by how much of the canvas each covers. Each swatch "
+            "shows the photo's own color, with the tube you would reach for to "
+            "mix it."
         )
 
         for column, swatch in zip(st.columns(len(palette)), palette):
+            # The swatch is the photo's own centroid, never a render of the
+            # paint measurement. Showing the paint's color would quietly claim
+            # the match is exact.
+            paint_name, delta_e = nearest_paint(swatch["lab"])
             with column:
                 st.image(np.full((90, 200, 3), swatch["rgb"], dtype=np.uint8))
-                st.caption(f"{swatch['hex']}\n\n{swatch['share'] * 100:.1f}%")
+                st.markdown(f"**{paint_name}**")
+                st.caption(
+                    f"{swatch['share'] * 100:.1f}% of canvas\n\n"
+                    f"{swatch['hex']} · ΔE {delta_e:.0f}"
+                )
+
+        with st.expander("How the tube names are chosen"):
+            st.markdown(
+                "Tube suggestions are approximate. Underpainting compares dominant "
+                "sRGB photo colors with measured wet-paint masstones from a limited "
+                "reference palette. Camera processing, lighting, transparency, ground "
+                "color, mixtures, and drying shifts are not modeled. Use these names "
+                "as starting points, not mixing formulas.\n\n"
+                "The reference values are masstones, paint straight from the tube at "
+                "full strength, while most of a photo is mid-values and tints. That is "
+                "why the ΔE numbers are large even when the tube names are right: the "
+                "question being answered is which tube to reach for, not what the color "
+                "is.\n\n"
+                "Reference CIE Lab measurements: [Williamsburg Artist Oil Colors]"
+                "(https://justpaint.org/wp-content/uploads/2017/06/"
+                "Munsell-and-CIELAB-Data-for-Williamsburg-Oils_munsell_ordering.pdf), "
+                "measured from 6-mil wet drawdowns with a non-contact "
+                "spectrophotometer. The published table does not specify its "
+                "illuminant/observer setting. Underpainting is independent and is not "
+                "affiliated with or endorsed by Golden Artist Colors or Williamsburg."
+            )
 
 st.divider()
 st.subheader("Model connection test")
