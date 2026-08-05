@@ -166,15 +166,17 @@ else:
 if image_bytes is not None:
     start = time.time()
     try:
-        rgb_array = load_rgb(image_bytes, MAX_DIMENSION)
+        with st.spinner("Reading your photo..."):
+            rgb_array = load_rgb(image_bytes, MAX_DIMENSION)
     except Exception:
         st.error("Couldn't read that file as an image. Try a JPEG, PNG, or HEIC photo.")
     else:
-        gray_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2GRAY)
+        with st.spinner("Building the value study and palette..."):
+            gray_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2GRAY)
 
-        coarse_study = posterize(gray_array, COARSE_LEVELS)
-        fine_study = posterize(gray_array, FINE_LEVELS)
-        palette = extract_palette(rgb_array)
+            coarse_study = posterize(gray_array, COARSE_LEVELS)
+            fine_study = posterize(gray_array, FINE_LEVELS)
+            palette = extract_palette(rgb_array)
 
         elapsed = time.time() - start
 
@@ -246,15 +248,17 @@ if image_bytes is not None:
             "left to right is the order you would actually build the painting."
         )
 
-        stages = build_stages(rgb_array, palette)
+        with st.spinner("Building the four stages..."):
+            stages = build_stages(rgb_array, palette)
         for column, stage, caption in zip(st.columns(4), stages, STAGE_CAPTIONS):
             with column:
                 st.image(stage, caption=caption)
 
-        gif_stages = [downsample(stage, GIF_MAX_PX) for stage in stages]
-        gif_frames = cross_fade_frames(gif_stages, FADE_FRAMES)
-        gif_durations = frame_durations(len(gif_stages), FADE_FRAMES)
-        gif_bytes = encode_gif(gif_frames, gif_durations)
+        with st.spinner("Encoding the animation..."):
+            gif_stages = [downsample(stage, GIF_MAX_PX) for stage in stages]
+            gif_frames = cross_fade_frames(gif_stages, FADE_FRAMES)
+            gif_durations = frame_durations(len(gif_stages), FADE_FRAMES)
+            gif_bytes = encode_gif(gif_frames, gif_durations)
 
         st.image(gif_bytes)
 
