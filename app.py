@@ -33,15 +33,31 @@ st.write("Upload a photo and see how a painter would block it in.")
 MAX_DIMENSION = 1200
 
 # Lets a stranger with no photo of their own see all four outputs on the
-# first try, and gives browser automation something to click: the file
-# picker itself can't be driven, so this is the only upload path that's
-# ever been testable end to end. Dead Vlei, Namibia, by Diego Delso,
-# CC BY-SA 4.0 (source in the caption below), chosen for full black-to-
-# white range in one frame and strong warm/cool contrast, so it exercises
-# the value study, the palette, and the temperature stat, not just the
-# filmstrip.
+# first try, and gives browser automation something to click: the native
+# file picker can't be driven, so this is the only path that makes the
+# whole app testable end to end. Chosen for full black-to-white range in
+# one frame and strong warm/cool contrast, so it exercises the value
+# study, the palette, and the temperature stat, not just the filmstrip.
+#
+# The attribution below is a license condition, not decoration. CC BY-SA
+# 4.0 section 3(a)(1) wants the creator named, a link to the source, and
+# an indication that the material was modified; the file here is a
+# downscaled rendition, and everything the app derives from it on screen
+# is modified further. Don't trim this to fit a layout.
 SAMPLE_IMAGE_PATH = Path(__file__).parent / "assets" / "sample-dead-vlei.jpg"
 SAMPLE_CREDIT = "Dead Vlei, Namibia · Diego Delso, delso.photo, CC BY-SA 4.0"
+SAMPLE_SOURCE_URL = (
+    "https://commons.wikimedia.org/wiki/"
+    "File:Dead_Vlei,_Sossusvlei,_Namibia,_2018-08-06,_DD_086.jpg"
+)
+SAMPLE_LICENSE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
+SAMPLE_NOTICE = (
+    f"Sample photo by Diego Delso, [delso.photo](https://delso.photo), "
+    f"[source]({SAMPLE_SOURCE_URL}), licensed "
+    f"[CC BY-SA 4.0]({SAMPLE_LICENSE_URL}). Resized from the original, and "
+    "modified further by the studies, stages, and animation above, which are "
+    "themselves CC BY-SA 4.0."
+)
 
 # Hardcoded on purpose. Cut list item 1: no tunable UI, even if on schedule.
 # A curated pair of studies is a better demo than a slider that lets a visitor
@@ -143,23 +159,41 @@ def generate_writeup(image_bytes, rubric_version, model):
 if "use_sample" not in st.session_state:
     st.session_state.use_sample = False
 
-uploaded_file = st.file_uploader(
-    "Upload a photo", type=["jpg", "jpeg", "png", "heic", "heif"]
-)
-if uploaded_file is not None:
-    # An explicit upload always wins over a previously clicked sample.
+
+def _clear_sample():
+    """Touching the uploader is an explicit choice to stop using the sample.
+
+    This has to be a callback rather than a plain `if uploaded_file is not
+    None` check after the widget. st.file_uploader keeps returning the same
+    file on every rerun until it's cleared, so a plain check can't tell "the
+    visitor just uploaded this" from "that file has been sitting there since
+    three clicks ago". Reading it as the former made the sample button dead
+    for anyone who had already uploaded something. Measured, not assumed:
+    clicking the sample button with a file loaded left the page on the
+    uploaded photo with no feedback at all.
+    """
     st.session_state.use_sample = False
+
+
+uploaded_file = st.file_uploader(
+    "Upload a photo",
+    type=["jpg", "jpeg", "png", "heic", "heif"],
+    on_change=_clear_sample,
+)
 
 st.caption("No photo handy?")
 if st.button("Try a sample photo"):
     st.session_state.use_sample = True
 
-if uploaded_file is not None:
-    image_bytes = uploaded_file.getvalue()
-    source_caption = "Original"
-elif st.session_state.use_sample:
+# Whichever the visitor chose most recently wins, which is why the sample is
+# checked first: the flag is only ever set by a click on the button, and only
+# ever cleared by the uploader's own on_change.
+if st.session_state.use_sample:
     image_bytes = SAMPLE_IMAGE_PATH.read_bytes()
     source_caption = f"Sample photo · {SAMPLE_CREDIT}"
+elif uploaded_file is not None:
+    image_bytes = uploaded_file.getvalue()
+    source_caption = "Original"
 else:
     image_bytes = None
 
@@ -178,8 +212,6 @@ if image_bytes is not None:
             fine_study = posterize(gray_array, FINE_LEVELS)
             palette = extract_palette(rgb_array)
 
-        elapsed = time.time() - start
-
         col1, col2 = st.columns(2)
         with col1:
             st.image(rgb_array, caption=source_caption)
@@ -189,7 +221,13 @@ if image_bytes is not None:
         # Pixel dimensions are noise to a visitor; processing time is a real
         # signal to a technical one ("this ran in a fraction of a second"),
         # so it stays and the dimensions go.
-        st.caption(f"Processed in {elapsed:.2f}s")
+        #
+        # Reserved here and filled in after the GIF, because the honest number
+        # is the one the visitor actually waited through. Timing only as far
+        # as the palette and printing that next to the first image reported
+        # 0.12s of a 0.25s pipeline on the sample photo: a precise-looking
+        # number that was wrong by half, which is worse than no number.
+        timing_caption = st.empty()
 
         st.markdown("**Value studies**")
 
@@ -261,6 +299,13 @@ if image_bytes is not None:
             gif_bytes = encode_gif(gif_frames, gif_durations)
 
         st.image(gif_bytes)
+
+        timing_caption.caption(f"Processed in {time.time() - start:.2f}s")
+
+        # Placed after the derived images rather than beside the original,
+        # because the ShareAlike note refers to all of them.
+        if st.session_state.use_sample:
+            st.caption(SAMPLE_NOTICE)
 
         st.markdown("**Step-by-step guide**")
         st.caption(
