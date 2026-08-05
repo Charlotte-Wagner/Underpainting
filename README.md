@@ -13,8 +13,12 @@ sample photo, so the repo tells the story even while it's waking up:
 
 ![The four build stages of a desert photo cross-fading into each other: a 3-value study, the photo recolored to a 6-swatch palette, softened detail, and the full photo.](assets/sample-output.gif)
 
-*Sample photo: Dead Vlei, Namibia, by Diego Delso (delso.photo), licensed
-[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).*
+*The animation above is derived from "Dead Vlei, Sossusvlei, Namibia" by
+[Diego Delso](https://delso.photo)
+([source](https://commons.wikimedia.org/wiki/File:Dead_Vlei,_Sossusvlei,_Namibia,_2018-08-06,_DD_086.jpg)),
+licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). It is a modified
+version of that photograph and is offered under the same license. See
+[Credits](#credits-and-licensing).*
 
 ---
 
@@ -121,3 +125,33 @@ being that the lightest value lands on true white, not short of it (see
 
 Cutting these isn't a gap: v1 is upload-a-photo, get-a-result, nothing more, on
 purpose. Anything else goes in a running v2 list instead of into this branch.
+
+## Credits and licensing
+
+**The sample photograph.** `assets/sample-dead-vlei.jpg` is "Dead Vlei, Sossusvlei,
+Namibia, 2018-08-06, DD 086" by [Diego Delso](https://delso.photo), from
+[Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Dead_Vlei,_Sossusvlei,_Namibia,_2018-08-06,_DD_086.jpg),
+licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). **Modified:**
+downscaled from the 8078x5399 original to a 1920px-wide rendition. It is included as
+third-party material, not as work of this project.
+
+`assets/sample-output.gif` is an adaptation of that photograph produced by this app's own
+pipeline, and is therefore also licensed
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The same applies to the
+value studies, palette swatches, stage images, and animation the running app derives from
+the sample photo.
+
+Including a ShareAlike image alongside the source does not place the source under
+ShareAlike: the repository is an aggregation, and the code is not an adaptation of the
+photograph. Only material actually derived from the photo carries the license forward.
+
+**The paint reference data.** CIE Lab values in `paints.py` come from Golden Artist
+Colors' published measurements for Williamsburg oils, cited in that file. Underpainting is
+independent and is not affiliated with or endorsed by Golden Artist Colors or Williamsburg.
+
+**Photos you upload** are decoded in memory to render the page, and are sent to the
+Anthropic API only if you press the button that asks for a written guide. This app writes
+no image to disk (every encode goes to an in-memory buffer) and has no database. It does
+keep a Streamlit in-memory cache keyed on the uploaded bytes, so pressing the button twice
+for the same photo doesn't bill a second API call; that cache is not persisted and is lost
+when the server restarts.

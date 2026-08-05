@@ -33,15 +33,31 @@ st.write("Upload a photo and see how a painter would block it in.")
 MAX_DIMENSION = 1200
 
 # Lets a stranger with no photo of their own see all four outputs on the
-# first try, and gives browser automation something to click: the file
-# picker itself can't be driven, so this is the only upload path that's
-# ever been testable end to end. Dead Vlei, Namibia, by Diego Delso,
-# CC BY-SA 4.0 (source in the caption below), chosen for full black-to-
-# white range in one frame and strong warm/cool contrast, so it exercises
-# the value study, the palette, and the temperature stat, not just the
-# filmstrip.
+# first try, and gives browser automation something to click: the native
+# file picker can't be driven, so this is the only path that makes the
+# whole app testable end to end. Chosen for full black-to-white range in
+# one frame and strong warm/cool contrast, so it exercises the value
+# study, the palette, and the temperature stat, not just the filmstrip.
+#
+# The attribution below is a license condition, not decoration. CC BY-SA
+# 4.0 section 3(a)(1) wants the creator named, a link to the source, and
+# an indication that the material was modified; the file here is a
+# downscaled rendition, and everything the app derives from it on screen
+# is modified further. Don't trim this to fit a layout.
 SAMPLE_IMAGE_PATH = Path(__file__).parent / "assets" / "sample-dead-vlei.jpg"
 SAMPLE_CREDIT = "Dead Vlei, Namibia · Diego Delso, delso.photo, CC BY-SA 4.0"
+SAMPLE_SOURCE_URL = (
+    "https://commons.wikimedia.org/wiki/"
+    "File:Dead_Vlei,_Sossusvlei,_Namibia,_2018-08-06,_DD_086.jpg"
+)
+SAMPLE_LICENSE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
+SAMPLE_NOTICE = (
+    f"Sample photo by Diego Delso, [delso.photo](https://delso.photo), "
+    f"[source]({SAMPLE_SOURCE_URL}), licensed "
+    f"[CC BY-SA 4.0]({SAMPLE_LICENSE_URL}). Resized from the original, and "
+    "modified further by the studies, stages, and animation above, which are "
+    "themselves CC BY-SA 4.0."
+)
 
 # Hardcoded on purpose. Cut list item 1: no tunable UI, even if on schedule.
 # A curated pair of studies is a better demo than a slider that lets a visitor
@@ -285,6 +301,11 @@ if image_bytes is not None:
         st.image(gif_bytes)
 
         timing_caption.caption(f"Processed in {time.time() - start:.2f}s")
+
+        # Placed after the derived images rather than beside the original,
+        # because the ShareAlike note refers to all of them.
+        if st.session_state.use_sample:
+            st.caption(SAMPLE_NOTICE)
 
         st.markdown("**Step-by-step guide**")
         st.caption(
