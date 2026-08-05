@@ -20,8 +20,9 @@ would be easy to get wrong if you rebuilt this from scratch.
 - **`gif.py`** — Encodes the four build stages into a looping GIF. Kept out of
   `imaging.py` because its output is GIF bytes through Pillow, not a numpy array back
   out; same standard otherwise, zero Streamlit imports.
-- **Planned, not yet built:** a palette module (k-means clustering + paint-tube lookup
-  table), and the rubric prompt sent alongside the photo to the Anthropic API.
+- **Planned, not yet built:** the rubric prompt sent alongside the photo to the Anthropic
+  API. The palette module (k-means clustering in `imaging.py`, paint-tube lookup in
+  `paints.py`) shipped in S6/S7.
 
 ## Data flow
 
@@ -34,7 +35,7 @@ grayscale, and both studies side by side.
 *same* source image, not chained off each other:
 1. Grayscale → posterize → value study (built)
 2. Downsample → k-means in Lab space → sorted centroids → nearest-paint-tube match →
-   palette (not built)
+   palette (built)
 3. All four build stages generated in parallel from the source, then cross-faded → GIF
    (built)
 4. Photo + measured stats (value range, dominant palette, temperature) + a hand-written
