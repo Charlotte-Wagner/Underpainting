@@ -184,10 +184,10 @@ if image_bytes is not None:
         with col2:
             st.image(gray_array, caption="Grayscale")
 
-        st.caption(
-            f"{rgb_array.shape[1]}×{rgb_array.shape[0]} px "
-            f"· processed in {elapsed:.2f}s"
-        )
+        # Pixel dimensions are noise to a visitor; processing time is a real
+        # signal to a technical one ("this ran in a fraction of a second"),
+        # so it stays and the dimensions go.
+        st.caption(f"Processed in {elapsed:.2f}s")
 
         st.markdown("**Value studies**")
 
@@ -196,15 +196,6 @@ if image_bytes is not None:
             st.image(coarse_study, caption=f"{COARSE_LEVELS}-value study")
         with col4:
             st.image(fine_study, caption=f"{FINE_LEVELS}-value study")
-
-        # Verification readout, not polish. Shows the actual values present in
-        # each study on this photo. Fewer than N means the photo has no pixels
-        # in that band, which is information about the photo, not a bug.
-        # Remove in S10.
-        st.caption(
-            f"{COARSE_LEVELS}-value: {np.unique(coarse_study).tolist()} · "
-            f"{FINE_LEVELS}-value: {np.unique(fine_study).tolist()}"
-        )
 
         st.markdown("**Palette and closest tube**")
         st.caption(
@@ -266,13 +257,6 @@ if image_bytes is not None:
         gif_bytes = encode_gif(gif_frames, gif_durations)
 
         st.image(gif_bytes)
-        # Verification readout, not polish. Real measured numbers, not
-        # estimates: frame count, loop length, and file size on this photo.
-        # Remove in S10.
-        st.caption(
-            f"{len(gif_frames)} frames · {sum(gif_durations) / 1000:.1f}s per loop · "
-            f"{len(gif_bytes) / 1024:.0f} KB"
-        )
 
         st.markdown("**Step-by-step guide**")
         st.caption(
