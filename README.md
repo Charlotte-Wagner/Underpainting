@@ -80,13 +80,14 @@ being that the lightest value lands on true white, not short of it (see
 - Grayscale conversion
 - Value study: posterize to 3 and 5 tonal levels, endpoints anchored at true black and
   true white
+- The four-stage build-order filmstrip, computed independently per stage from the same
+  source photo, and its cross-faded animated GIF
 - Anthropic API connectivity, gated behind an explicit button (never fires on upload)
 - Dev Container config for GitHub Codespaces
 
 **In progress / not yet built:**
 - Palette extraction (k-means clustering in Lab color space) and matching each color to a
   real paint tube name from a hand-built lookup table
-- The four-stage build-order filmstrip and its cross-faded animated GIF
 - The rubric-driven written step-by-step — the one output that calls a model
 - Automated tests
 - Deployed public link (see the top of this README once it's live)

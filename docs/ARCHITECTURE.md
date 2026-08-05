@@ -17,9 +17,11 @@ would be easy to get wrong if you rebuilt this from scratch.
 - **`.streamlit/secrets.toml`** (local) / **Streamlit Cloud Secrets** (deployed) — where
   the Anthropic API key lives. Never in code, never in git. `app.py` reads it once via
   `st.secrets["ANTHROPIC_API_KEY"]`.
+- **`gif.py`** — Encodes the four build stages into a looping GIF. Kept out of
+  `imaging.py` because its output is GIF bytes through Pillow, not a numpy array back
+  out; same standard otherwise, zero Streamlit imports.
 - **Planned, not yet built:** a palette module (k-means clustering + paint-tube lookup
-  table), a stage-generator module (the four-image build-order sequence + GIF export),
-  and the rubric prompt sent alongside the photo to the Anthropic API.
+  table), and the rubric prompt sent alongside the photo to the Anthropic API.
 
 ## Data flow
 
@@ -34,7 +36,7 @@ grayscale, and both studies side by side.
 2. Downsample → k-means in Lab space → sorted centroids → nearest-paint-tube match →
    palette (not built)
 3. All four build stages generated in parallel from the source, then cross-faded → GIF
-   (not built)
+   (built)
 4. Photo + measured stats (value range, dominant palette, temperature) + a hand-written
    teaching rubric → one Anthropic API call → written step-by-step (not built)
 
@@ -62,6 +64,14 @@ better demo than a configurable one.
 **The model call is gated behind a button, never automatic.** Streamlit reruns the whole
 script on every interaction, so an automatic call on upload would mean an unauthenticated
 public page can trigger unbounded API spend. One click, one call.
+
+**The build-order GIF shares one color table across every frame instead of letting
+Pillow quantize each frame separately.** Pillow's default is a per-frame palette, which
+makes consecutive frames pick slightly different color tables and the animation flicker
+on loop — invisible in a single screenshot, obvious in playback. `gif.py` samples pixel
+strips from every frame into one composite image, quantizes that once, and reuses the
+result as every frame's palette at save time, so the file's GIF color tables actually
+agree frame to frame.
 
 **Palette matching will run in Lab space, not RGB (planned).** RGB numeric distance
 doesn't track how different two colors *look* — two pairs the same distance apart in RGB
