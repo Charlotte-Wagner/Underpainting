@@ -7,11 +7,39 @@ numpy in and numpy out, which means it can be run on a 4x4 array by hand.
 
 import cv2
 import numpy as np
+from io import BytesIO
+from PIL import Image, ImageOps
 
 # Clustering settings. Hardcoded per cut list item 1: no sliders.
 PALETTE_SIZE = 6
 PALETTE_SAMPLE_PX = 200
 KMEANS_SEED = 0
+
+
+def load_rgb(image_bytes, max_dimension):
+    """Decode raw image bytes into an EXIF-corrected, resized, uint8 sRGB array.
+
+    Shared by app.py's main display flow and the cached model-call path, so
+    both start from the exact same pixels: same rotation, same resize, same
+    array. Never upscales, same as .thumbnail()'s own behavior.
+
+    HEIC/HEIF decoding depends on pillow_heif.register_heif_opener() having
+    already run once, which app.py does at import time. This function does
+    not call it itself: registration is global to Pillow, not scoped to
+    whichever file happens to call Image.open.
+
+    Args:
+        image_bytes: raw bytes of an uploaded image file.
+        max_dimension: long-edge cap in pixels.
+
+    Returns:
+        uint8 sRGB array (H, W, 3).
+    """
+    image = Image.open(BytesIO(image_bytes))
+    image = ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
+    image.thumbnail((max_dimension, max_dimension))
+    return np.array(image)
 
 
 def posterize(gray, n_levels):
@@ -60,6 +88,22 @@ def posterize_output_values(n_levels):
     """
     step = 255.0 / (n_levels - 1)
     return np.round(np.arange(n_levels) * step).astype(np.uint8)
+
+
+def value_range(gray):
+    """The actual darkest and lightest pixel in a grayscale array.
+
+    Not assumed to be 0 and 255. A hazy or low-contrast photo genuinely
+    doesn't reach either end, and that's information the rubric prompt
+    needs, not a bug to correct for.
+
+    Args:
+        gray: 2D uint8 array.
+
+    Returns:
+        (min, max) as plain Python ints.
+    """
+    return int(gray.min()), int(gray.max())
 
 
 # --------------------------------------------------------------------------
@@ -185,6 +229,30 @@ def extract_palette(rgb, k=PALETTE_SIZE, sample_px=PALETTE_SAMPLE_PX, seed=KMEAN
     return swatches
 
 
+def dominant_temperature(palette):
+    """Share-weighted average Lab b value across a palette's swatches.
+
+    The Lab b axis runs blue (negative) to yellow (positive), close enough
+    to painting's warm/cool axis to be useful, and free: it reuses the same
+    Lab values the palette already carries rather than a new color model.
+    Ignores the a axis (green/red) entirely, so this is a simplification,
+    not a full color-temperature measurement.
+
+    Weighted by share rather than a plain mean over the k swatches, so a
+    palette dominated by one large cool sky and a few small warm accents
+    reports as cool, which is what the canvas actually reads as.
+
+    Args:
+        palette: list of dicts from extract_palette, each with "lab" and
+            "share".
+
+    Returns:
+        Float. Positive leans warm (toward yellow), negative leans cool
+        (toward blue).
+    """
+    return sum(swatch["lab"][2] * swatch["share"] for swatch in palette)
+
+
 # --------------------------------------------------------------------------
 # Stage generation
 #
@@ -198,6 +266,13 @@ def extract_palette(rgb, k=PALETTE_SIZE, sample_px=PALETTE_SAMPLE_PX, seed=KMEAN
 
 STAGE_VALUE_LEVELS = 3
 STAGE_BLUR_FRACTION = 0.02
+
+# Labels for build_stages's four outputs, in order. Single source of truth:
+# app.py uses these as filmstrip captions and rubric.py uses the same
+# strings as the step labels it asks the model for, so the written guide
+# and the images point at each other instead of running two numbering
+# schemes that can drift apart.
+STAGE_CAPTIONS = ["1 · Values", "2 · Color masses", "3 · Soft focus", "4 · Full detail"]
 
 
 def value_block_in(rgb, n_levels=STAGE_VALUE_LEVELS):
