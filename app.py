@@ -1,6 +1,7 @@
 import base64
 import time
 from io import BytesIO
+from pathlib import Path
 
 import anthropic
 import cv2
@@ -30,6 +31,17 @@ st.title("Underpainting")
 st.write("Upload a photo and see how a painter would block it in.")
 
 MAX_DIMENSION = 1200
+
+# Lets a stranger with no photo of their own see all four outputs on the
+# first try, and gives browser automation something to click: the file
+# picker itself can't be driven, so this is the only upload path that's
+# ever been testable end to end. Dead Vlei, Namibia, by Diego Delso,
+# CC BY-SA 4.0 (source in the caption below), chosen for full black-to-
+# white range in one frame and strong warm/cool contrast, so it exercises
+# the value study, the palette, and the temperature stat, not just the
+# filmstrip.
+SAMPLE_IMAGE_PATH = Path(__file__).parent / "assets" / "sample-dead-vlei.jpg"
+SAMPLE_CREDIT = "Dead Vlei, Namibia · Diego Delso, delso.photo, CC BY-SA 4.0"
 
 # Hardcoded on purpose. Cut list item 1: no tunable UI, even if on schedule.
 # A curated pair of studies is a better demo than a slider that lets a visitor
@@ -128,13 +140,31 @@ def generate_writeup(image_bytes, rubric_version, model):
     return next(block.text for block in response.content if block.type == "text")
 
 
+if "use_sample" not in st.session_state:
+    st.session_state.use_sample = False
+
 uploaded_file = st.file_uploader(
     "Upload a photo", type=["jpg", "jpeg", "png", "heic", "heif"]
 )
+if uploaded_file is not None:
+    # An explicit upload always wins over a previously clicked sample.
+    st.session_state.use_sample = False
+
+st.caption("No photo handy?")
+if st.button("Try a sample photo"):
+    st.session_state.use_sample = True
 
 if uploaded_file is not None:
-    start = time.time()
     image_bytes = uploaded_file.getvalue()
+    source_caption = "Original"
+elif st.session_state.use_sample:
+    image_bytes = SAMPLE_IMAGE_PATH.read_bytes()
+    source_caption = f"Sample photo · {SAMPLE_CREDIT}"
+else:
+    image_bytes = None
+
+if image_bytes is not None:
+    start = time.time()
     try:
         rgb_array = load_rgb(image_bytes, MAX_DIMENSION)
     except Exception:
@@ -150,7 +180,7 @@ if uploaded_file is not None:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image(rgb_array, caption="Original")
+            st.image(rgb_array, caption=source_caption)
         with col2:
             st.image(gray_array, caption="Grayscale")
 
