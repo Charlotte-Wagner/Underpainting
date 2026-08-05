@@ -18,7 +18,7 @@ This is a work in progress, built in public across three weekends. **See
 |---|---|
 | **Streamlit** | Ships a working UI without writing frontend code, and deploys free to a public URL — the two things a 3-weekend solo portfolio project needs most. |
 | **Pillow + pillow-heif** | Image I/O, EXIF rotation, and HEIC support — real photos come straight off a phone, sideways, sometimes in Apple's format. |
-| **OpenCV (headless)** | Color-space conversion (grayscale now; Lab for perceptual color matching later). Headless build specifically — the normal `opencv-python` package expects desktop graphics libraries that don't exist on a cloud container. |
+| **OpenCV (headless)** | Color-space conversion: grayscale for the value study, Lab for perceptual palette clustering and paint matching. Headless build specifically — the normal `opencv-python` package expects desktop graphics libraries that don't exist on a cloud container. |
 | **numpy** | The actual pixel math. Every image is an array; every transformation is arithmetic on that array. |
 | **Anthropic API** | The one deliberately non-deterministic piece: turning a photo plus a hand-written painting rubric into a written, specific step-by-step. Everything else in the app is plain image processing on purpose — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why. |
 
@@ -54,9 +54,19 @@ this README shipped — none of it is guessed.
 
 ## Running the checks
 
-There's no automated test suite yet (see [Status](#status)). The image-math functions in
-`imaging.py` are deliberately plain numpy in, numpy out, with zero Streamlit calls, so
-they can be checked by hand against an array small enough to read by eye:
+No pytest suite yet (see [Status](#status)) — instead, each image-math step in
+`imaging.py` has a companion script that builds its own tiny arrays, asserts on them, and
+fails loudly on a wrong answer. That's a deliberate substitute for a full suite while the
+project is this small (see [CLAUDE.md](CLAUDE.md)), not a placeholder nobody wrote yet:
+
+```bash
+python test_posterize.py   # value study: posterize() anchors at true black/white
+python test_palette.py     # k-means palette clustering in Lab
+python test_paints.py      # nearest-tube paint matching
+```
+
+Each prints its own checks and ends with `ALL CHECKS PASSED`. For a single function by
+hand instead of the full script:
 
 ```bash
 python -c "
@@ -80,15 +90,16 @@ being that the lightest value lands on true white, not short of it (see
 - Grayscale conversion
 - Value study: posterize to 3 and 5 tonal levels, endpoints anchored at true black and
   true white
+- Palette extraction (k-means clustering in Lab color space, sorted by canvas coverage)
+  and matching each color to a real paint tube name from a measured-Lab lookup table
 - Anthropic API connectivity, gated behind an explicit button (never fires on upload)
 - Dev Container config for GitHub Codespaces
+- Hand-run check scripts for the value study, palette, and paint-matching steps (see
+  [Running the checks](#running-the-checks))
 
 **In progress / not yet built:**
-- Palette extraction (k-means clustering in Lab color space) and matching each color to a
-  real paint tube name from a hand-built lookup table
 - The four-stage build-order filmstrip and its cross-faded animated GIF
 - The rubric-driven written step-by-step — the one output that calls a model
-- Automated tests
 - Deployed public link (see the top of this README once it's live)
 
 **Intentionally out of scope for v1:**

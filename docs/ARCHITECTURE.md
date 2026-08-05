@@ -13,13 +13,17 @@ would be easy to get wrong if you rebuilt this from scratch.
 - **`imaging.py`** — Pure image-math functions: numpy arrays in, numpy arrays out, zero
   Streamlit imports. Kept separate from `app.py` specifically so a function like
   `posterize` can be imported from a plain Python shell and run against a 4x4 array by
-  hand, without booting a web server first.
+  hand, without booting a web server first. Also holds palette extraction: downsample →
+  k-means in Lab space → centroids sorted by canvas coverage.
+- **`paints.py`** — The paint-tube reference table (measured Lab masstones) and
+  `nearest_paint`, a nearest-neighbor match by Lab distance (ΔE) from a palette centroid
+  to the closest tube. Same numpy-in/numpy-out standard as `imaging.py`.
 - **`.streamlit/secrets.toml`** (local) / **Streamlit Cloud Secrets** (deployed) — where
   the Anthropic API key lives. Never in code, never in git. `app.py` reads it once via
   `st.secrets["ANTHROPIC_API_KEY"]`.
-- **Planned, not yet built:** a palette module (k-means clustering + paint-tube lookup
-  table), a stage-generator module (the four-image build-order sequence + GIF export),
-  and the rubric prompt sent alongside the photo to the Anthropic API.
+- **Planned, not yet built:** a stage-generator module (the four-image build-order
+  sequence + GIF export), and the rubric prompt sent alongside the photo to the Anthropic
+  API.
 
 ## Data flow
 
@@ -32,7 +36,7 @@ grayscale, and both studies side by side.
 *same* source image, not chained off each other:
 1. Grayscale → posterize → value study (built)
 2. Downsample → k-means in Lab space → sorted centroids → nearest-paint-tube match →
-   palette (not built)
+   palette (built)
 3. All four build stages generated in parallel from the source, then cross-faded → GIF
    (not built)
 4. Photo + measured stats (value range, dominant palette, temperature) + a hand-written
@@ -63,7 +67,10 @@ better demo than a configurable one.
 script on every interaction, so an automatic call on upload would mean an unauthenticated
 public page can trigger unbounded API spend. One click, one call.
 
-**Palette matching will run in Lab space, not RGB (planned).** RGB numeric distance
-doesn't track how different two colors *look* — two pairs the same distance apart in RGB
-can be visually nothing alike. Lab is built so equal distances look equally different,
-which is the property a nearest-paint match actually needs.
+**Palette matching runs in Lab space, not RGB.** RGB numeric distance doesn't track how
+different two colors *look* — two pairs the same distance apart in RGB can be visually
+nothing alike. Lab is built so equal distances look equally different, which is the
+property a nearest-paint match actually needs. The reported ΔE numbers run large because
+the reference table is masstones (paint straight from the tube) while most of a photo is
+mid-values and tints — see the in-app "How the tube names are chosen" note for the same
+caveat aimed at a user instead of a reviewer.
