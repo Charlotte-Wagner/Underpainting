@@ -143,23 +143,41 @@ def generate_writeup(image_bytes, rubric_version, model):
 if "use_sample" not in st.session_state:
     st.session_state.use_sample = False
 
-uploaded_file = st.file_uploader(
-    "Upload a photo", type=["jpg", "jpeg", "png", "heic", "heif"]
-)
-if uploaded_file is not None:
-    # An explicit upload always wins over a previously clicked sample.
+
+def _clear_sample():
+    """Touching the uploader is an explicit choice to stop using the sample.
+
+    This has to be a callback rather than a plain `if uploaded_file is not
+    None` check after the widget. st.file_uploader keeps returning the same
+    file on every rerun until it's cleared, so a plain check can't tell "the
+    visitor just uploaded this" from "that file has been sitting there since
+    three clicks ago". Reading it as the former made the sample button dead
+    for anyone who had already uploaded something. Measured, not assumed:
+    clicking the sample button with a file loaded left the page on the
+    uploaded photo with no feedback at all.
+    """
     st.session_state.use_sample = False
+
+
+uploaded_file = st.file_uploader(
+    "Upload a photo",
+    type=["jpg", "jpeg", "png", "heic", "heif"],
+    on_change=_clear_sample,
+)
 
 st.caption("No photo handy?")
 if st.button("Try a sample photo"):
     st.session_state.use_sample = True
 
-if uploaded_file is not None:
-    image_bytes = uploaded_file.getvalue()
-    source_caption = "Original"
-elif st.session_state.use_sample:
+# Whichever the visitor chose most recently wins, which is why the sample is
+# checked first: the flag is only ever set by a click on the button, and only
+# ever cleared by the uploader's own on_change.
+if st.session_state.use_sample:
     image_bytes = SAMPLE_IMAGE_PATH.read_bytes()
     source_caption = f"Sample photo · {SAMPLE_CREDIT}"
+elif uploaded_file is not None:
+    image_bytes = uploaded_file.getvalue()
+    source_caption = "Original"
 else:
     image_bytes = None
 
