@@ -1,8 +1,32 @@
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
-.DS_Store
+*.egg-info/
+
+# Environment variables and secrets - never commit real values
+.env
+.env.*
+!.env.example
 .streamlit/secrets.toml
+*.pem
+*.key
+
+# Editor / OS junk
+.DS_Store
+.vscode/
+.idea/
+
+# Build output
+build/
+dist/
+
+# Test / coverage output
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
 
 # local coding-tool config, contains machine-specific paths
 .claude/
