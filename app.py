@@ -1,14 +1,27 @@
+import base64
 import time
+from io import BytesIO
 
 import anthropic
 import cv2
 import numpy as np
 import pillow_heif
 import streamlit as st
-from PIL import Image, ImageOps
+from PIL import Image
 
+import rubric
 from gif import encode_gif, frame_durations
-from imaging import build_stages, cross_fade_frames, downsample, extract_palette, posterize
+from imaging import (
+    STAGE_CAPTIONS,
+    build_stages,
+    cross_fade_frames,
+    dominant_temperature,
+    downsample,
+    extract_palette,
+    load_rgb,
+    posterize,
+    value_range,
+)
 from paints import nearest_paint
 
 pillow_heif.register_heif_opener()
@@ -31,7 +44,89 @@ FINE_LEVELS = 5
 # to the build-order read. See debug-log.md, diamond-4.
 GIF_MAX_PX = 300
 FADE_FRAMES = 4
-STAGE_CAPTIONS = ["1 · Values", "2 · Color masses", "3 · Soft focus", "4 · Full detail"]
+
+# Set by the S9 A/B, not left as a default. Both models were run on both test
+# photos, twice each. Both produced writeups specific to the actual photo, and
+# the two photos produced writeups with almost no shared content, which is the
+# whole verification bar for this session. Opus applied two rubric points more
+# consistently (temperature as relative rather than absolute, and saving the
+# brightest accent for last) and cost 1.8x: $0.048 a writeup against $0.026, so
+# a $5 balance buys ~104 writeups instead of ~190. On a public URL with no
+# authentication the balance is a safety net, and the gap was not worth halving
+# it. Full comparison in debug-log.md, diamond-5.
+MODEL_NAME = "claude-sonnet-5"
+
+# Measured, not estimated. At 800 the first A/B run truncated all four writeups
+# mid-sentence: the build plan's ~550-token estimate for a 400-word reply is low
+# once markdown formatting and the four step labels are counted, and Opus in
+# particular spends tokens on punctuation the estimate didn't anticipate. 1500 is
+# roughly double the longest complete reply measured, so the ceiling is headroom
+# rather than the thing deciding the length. The word count is controlled by the
+# prompt's own limit, not by cutting the reply off.
+API_MAX_TOKENS = 1500
+
+# Bump this by hand whenever rubric.RUBRIC's text changes. It's part of the
+# cache key below specifically so an edited rubric produces a fresh writeup
+# instead of silently returning a stale cached one for the same photo.
+RUBRIC_VERSION = "v2"
+
+
+@st.cache_data(show_spinner=False)
+def generate_writeup(image_bytes, rubric_version, model):
+    """Photo + measured stats + rubric -> written step-by-step guide.
+
+    Cached on (image_bytes, rubric_version, model), three simple hashable
+    values, rather than accepting an already-computed rgb array or palette
+    as an argument: recomputing them here costs about 0.2s (measured in S6
+    and S8) and avoids the alternative of making Streamlit hash a numpy
+    array or a list of dicts, which is slower and easier to get subtly
+    wrong. model is part of the key, not just a constant, so the same photo
+    can be compared across models without one call's cache entry hiding the
+    other's (see the S9 A/B in debug-log.md).
+
+    Exceptions are allowed to propagate out of this function rather than
+    being caught here: st.cache_data never caches a raised exception, so a
+    failed call is retried on the next click instead of being cached as a
+    permanent failure.
+
+    Args:
+        image_bytes: raw bytes of the uploaded file, unresized.
+        rubric_version: hand-bumped string, see RUBRIC_VERSION above.
+        model: Anthropic model name to call.
+
+    Returns:
+        The model's written step-by-step guide as plain text.
+    """
+    rgb = load_rgb(image_bytes, MAX_DIMENSION)
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    palette = extract_palette(rgb)
+    prompt_text = rubric.build_prompt(value_range(gray), dominant_temperature(palette))
+
+    buffer = BytesIO()
+    Image.fromarray(rgb).save(buffer, format="JPEG", quality=90)
+    photo_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+    response = client.messages.create(
+        model=model,
+        max_tokens=API_MAX_TOKENS,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": photo_b64,
+                    },
+                },
+                {"type": "text", "text": prompt_text},
+            ],
+        }],
+    )
+    return next(block.text for block in response.content if block.type == "text")
+
 
 uploaded_file = st.file_uploader(
     "Upload a photo", type=["jpg", "jpeg", "png", "heic", "heif"]
@@ -39,16 +134,12 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     start = time.time()
+    image_bytes = uploaded_file.getvalue()
     try:
-        image = Image.open(uploaded_file)
+        rgb_array = load_rgb(image_bytes, MAX_DIMENSION)
     except Exception:
         st.error("Couldn't read that file as an image. Try a JPEG, PNG, or HEIC photo.")
     else:
-        image = ImageOps.exif_transpose(image)
-        image = image.convert("RGB")
-        image.thumbnail((MAX_DIMENSION, MAX_DIMENSION))
-
-        rgb_array = np.array(image)
         gray_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2GRAY)
 
         coarse_study = posterize(gray_array, COARSE_LEVELS)
@@ -153,27 +244,21 @@ if uploaded_file is not None:
             f"{len(gif_bytes) / 1024:.0f} KB"
         )
 
-st.divider()
-st.subheader("Model connection test")
+        st.markdown("**Step-by-step guide**")
+        st.caption(
+            "Sends this photo, plus its measured value range and dominant "
+            "temperature, to Claude for a written stage-by-stage guide."
+        )
 
-if st.button("Ask Claude something"):
-    with st.spinner("Asking Claude..."):
-        try:
-            client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
-            response = client.messages.create(
-                model="claude-sonnet-5",
-                max_tokens=200,
-                thinking={"type": "disabled"},
-                messages=[{
-                    "role": "user",
-                    "content": "In one sentence, what is underpainting in traditional oil painting?",
-                }],
-            )
-            reply = next(b.text for b in response.content if b.type == "text")
-            st.write(reply)
-        except anthropic.AuthenticationError:
-            st.error("Invalid API key. Check the secret in Streamlit Cloud settings.")
-        except anthropic.APIStatusError as e:
-            st.error(f"API error: {e.message}")
-        except anthropic.APIConnectionError:
-            st.error("Couldn't reach the API. Check your internet connection.")
+        if st.button("Generate step-by-step guide"):
+            with st.spinner("Writing the guide..."):
+                try:
+                    writeup = generate_writeup(image_bytes, RUBRIC_VERSION, MODEL_NAME)
+                except anthropic.AuthenticationError:
+                    st.error("Invalid API key. Check the secret in Streamlit Cloud settings.")
+                except anthropic.APIStatusError as e:
+                    st.error(f"API error: {e.message}")
+                except anthropic.APIConnectionError:
+                    st.error("Couldn't reach the API. Check your internet connection.")
+                else:
+                    st.markdown(writeup)
