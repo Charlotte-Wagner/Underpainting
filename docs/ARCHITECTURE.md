@@ -14,7 +14,10 @@ this file ever outlives the code, that's a bug in the file.
 - **`imaging.py`**: Pure image-math functions: numpy arrays in, numpy arrays out, zero
   Streamlit imports. Kept separate from `app.py` specifically so a function like
   `posterize` can be imported from a plain Python shell and run against a 4x4 array by
-  hand, without booting a web server first.
+  hand, without booting a web server first. The line-drawing functions live here rather
+  than in a module of their own even though they are a self-contained subsystem: they
+  need `srgb_to_lab`, `posterize`, and the palette assignment, and `build_stages` needs
+  them back, so a separate module would be a circular import for no gain.
 - **`.streamlit/secrets.toml`** (local) / **Streamlit Cloud Secrets** (deployed): where
   the Anthropic API key lives. Never in code, never in git. `app.py` reads it once via
   `st.secrets["ANTHROPIC_API_KEY"]`.
@@ -49,9 +52,16 @@ image, never chained off each other:
 1. Grayscale → posterize → value study
 2. Downsample → k-means in Lab space → sorted centroids → nearest-paint-tube match →
    palette
-3. All four build stages generated in parallel from the source, then cross-faded → GIF
+3. All four build stages generated in parallel from the source, then cross-faded → GIF.
+   Stage 1 is also the image shown at the top of the page beside the original, computed
+   once and reused rather than built twice
 4. Photo + measured stats (value range, dominant temperature) + a hand-written teaching
    rubric → one Anthropic API call → written step-by-step
+
+Path 3's stages depend on path 2's palette: the drawing outlines the shapes the palette
+clusters define, and stages 2 and 3 paint with the palette's own six colors. That is the
+one place the four paths touch, and it is deliberate. The filmstrip showing colors the
+swatch panel does not is the version where the two outputs look unrelated.
 
 Paths 1 through 3 run automatically on load. Path 4 runs only on an explicit button
 click, and its result is cached on (image bytes, rubric version, model). Path 4 is also
@@ -67,6 +77,33 @@ every run. A stage produced by posterizing and color-quantizing the *same* sourc
 is provably still that photo, just with information removed, which is what an
 underpainting actually is. It's also free, instant, and deterministic. Use a model where
 the task needs judgment (the rubric write-up); use arithmetic where it doesn't.
+
+**The stages open on a drawing, and the value studies are a checking tool rather than a
+stage.** Until S12 the filmstrip ran values, color masses, soft focus, full detail, and
+testing it on non-painters found they could not interpret the value study or say what to
+do with it. Two things were wrong. The value study had no caption anywhere on the page
+while every other output explained itself, so the test measured a presentation failure as
+much as a content failure. And `rubric.py` had been saying since S9 to get the drawing and
+the proportions down before any value work, which the images never showed: the text and
+the pictures disagreed. So the drawing became stage 1, the progression stays in color
+after it, and the value studies moved below the build order with a caption framing them as
+the thing to hold your own block-in against.
+
+The soft-focus stage was cut to make room rather than extending the filmstrip to five,
+because the GIF's frame budget is frame count times frame size and that was already
+measured. It is not a loss: a Gaussian blur was always standing in for "detail not yet
+resolved," which is not an operation a painter performs on a canvas.
+
+**A line is kept only where the two sides of it are genuinely different colors.** The
+drawing unions two sources that fail in opposite directions. Region outlines, taken from a
+label map of palette cluster crossed with value band, can only draw borders between large
+areas, so anything thin or internal to one area is invisible to them. Canny edges on a
+bilateral-filtered copy see exactly those and little else. Both then get the test neither
+had alone: the two regions' own mean Lab values must differ by at least ΔE 15, the same
+distance the paint matching uses. Without it the edge pass misses the sample photo's dune
+ridge entirely, because a gradual sky-to-sand transition has no sharp gradient anywhere,
+and the region pass invents wobbling lines across a smooth studio backdrop, because a
+smooth backdrop still gets cut into clusters and every cut becomes a border.
 
 **Posterize anchors its endpoints at true black and true white.** The step between levels
 is `255 / (n_levels - 1)`, not `255 / n_levels`. The tempting version, integer division,
@@ -86,10 +123,25 @@ public page can trigger unbounded API spend. One click, one call.
 **The build-order GIF shares one color table across every frame instead of letting
 Pillow quantize each frame separately.** Pillow's default is a per-frame palette, which
 makes consecutive frames pick slightly different color tables and the animation flicker
-on loop: invisible in a single screenshot, obvious in playback. `gif.py` samples pixel
-strips from every frame into one composite image, quantizes that once, and reuses the
-result as every frame's palette at save time, so the file's GIF color tables actually
-agree frame to frame.
+on loop: invisible in a single screenshot, obvious in playback. `gif.py` samples rows from
+every frame into one composite image, quantizes that once, and reuses the result as every
+frame's palette at save time, so the file's GIF color tables actually agree frame to frame.
+
+Those rows are spread evenly down each frame, not taken as a strip off the top, and that
+detail is load-bearing. A top strip only represents a frame if the frame is uniform
+vertically. S12's line drawing is not: the sample photo's drawing has nothing but flat
+toned ground across its top quarter, so pure black never reached the quantizer, got no
+palette entry, and every line in the animation's first frame rendered in the sky's dark
+blue. The fix costs file size, since a palette that fits the whole frame gives
+Floyd-Steinberg more near-neighbors to dither between and dithered flat areas compress
+worse: the sample photo's GIF went from 86KB to 212KB.
+
+That was checked against the thing S8 actually cared about, a phone on cell data, rather
+than accepted or refused on the number alone. Measured on the loaded page, the animation
+is 207KB of 1,719KB of images, 12% of what the page ships, and the original photo alone is
+505KB. S8's concern was a 1.1MB animation that was the dominant asset; 212KB is not. So
+dithering stays on, which is S8's decision, not a default nobody rechecked. Turning it off
+was measured too and recovers about a quarter of the size.
 
 **Palette matching runs in Lab space, not RGB.** RGB numeric distance doesn't track how
 different two colors *look*. Two pairs the same distance apart in RGB can be visually

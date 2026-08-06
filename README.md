@@ -11,7 +11,7 @@ Free-tier apps sleep after a period of inactivity, so a cold visit may show a wa
 screen for the first 30 seconds or so. Here's the build-order output on the app's own
 sample photo, so the repo tells the story even while it's waking up:
 
-![The four build stages of a desert photo cross-fading into each other: a 3-value study, the photo recolored to a 6-swatch palette, softened detail, and the full photo.](assets/sample-output.gif)
+![The four build stages of a desert photo cross-fading into each other on a toned gray ground: a line drawing of the tree and the dune ridge, then the darkest and lightest bands filled in with a 6-swatch palette, then the midtones added, then the full photo.](assets/sample-output.gif)
 
 *The animation above is derived from "Dead Vlei, Sossusvlei, Namibia" by
 [Diego Delso](https://delso.photo)
@@ -77,6 +77,7 @@ python test_palette.py     # k-means palette clustering in Lab
 python test_paints.py      # nearest-tube paint matching by measured Lab distance
 python test_stages.py      # the four build-order stages, computed independently
 python test_gif.py         # cross-fade GIF, one shared color table (no flicker)
+                           #   and every frame's colors reaching that table
 python test_rubric.py      # the rubric reaches the model prompt unaltered
 python test_stats.py       # value range and dominant temperature measurement
 python test_demo_writeup.py  # the saved fallback guide still matches the rubric and photo
@@ -104,13 +105,18 @@ being that the lightest value lands on true white, not short of it (see
 **Working today:**
 - Photo upload (JPEG, PNG, HEIC) with EXIF-safe rotation and resize to a 1200px max
   dimension, plus a one-click sample photo for visitors without one handy
+- A line drawing of the photo's biggest shapes: region outlines and contrast edges
+  unioned, with a boundary kept only where the two sides differ by at least ΔE 15 in Lab,
+  so what survives is structure rather than texture
 - Value study: posterize to 3 and 5 tonal levels, endpoints anchored at true black and
-  true white
+  true white, shown as a tool for checking your own block-in rather than a stage to copy
 - Palette extraction: k-means clustering in Lab color space, 6 swatches sorted by how
   much of the canvas each covers, each matched to the nearest tube in a measured-Lab
   paint reference
-- The four-stage build-order filmstrip, computed independently per stage from the same
-  source photo, and its cross-faded animated GIF with one shared color table
+- The four-stage build-order filmstrip on a toned ground, in the order a painter works:
+  the drawing, the darkest and lightest bands in palette color, the midtones, the
+  untouched photo. Computed independently per stage from the same source photo, with a
+  cross-faded animated GIF sharing one color table
 - A written step-by-step guide from the Anthropic API, built from a hand-written
   painting rubric plus this photo's own measured value range and temperature, gated
   behind an explicit button so it never fires on upload, and cached so the same photo
