@@ -10,6 +10,7 @@ import pillow_heif
 import streamlit as st
 from PIL import Image
 
+import demo_writeup
 import rubric
 from gif import encode_gif, frame_durations
 from imaging import (
@@ -159,6 +160,62 @@ def generate_writeup(image_bytes, rubric_version, model):
         }],
     )
     return next(block.text for block in response.content if block.type == "text")
+
+
+def show_saved_guide_or_error(image_bytes, short_reason, error_message):
+    """Demo mode: the saved guide when the live call fails, or an honest error.
+
+    Only reachable from a failed call, never from a healthy one, so this cannot quietly
+    replace the feature it is insuring. Which of the two a visitor gets is decided by the
+    photo itself, hashed against the file the saved guide was written from, rather than by
+    which button was clicked: the guide names a dead tree, a dune, and cracked ground, so
+    serving it beside anything else would describe a photo that isn't on the page. An
+    upload therefore gets the S4 error message unchanged, plus a pointer at the one photo
+    that does have something saved.
+
+    The on-screen note is the feature, not a disclaimer bolted onto it. Passing a saved
+    file off as a live model response is exactly the kind of untrue claim CLAUDE.md rules
+    out, and "here is what the model wrote, saved earlier" is a better answer than
+    pretending an API never fails. The note also names why the live call failed, so a real
+    outage during development still looks like an outage instead of hiding behind a smooth
+    fallback.
+
+    Args:
+        image_bytes: the bytes currently being displayed, sample or upload.
+        short_reason: visitor-facing phrase for why the live call didn't happen.
+        error_message: the operator-facing message, kept from S4, for the no-fallback case.
+    """
+    if not demo_writeup.matches_sample(image_bytes):
+        st.error(error_message)
+        st.caption(
+            "There's nothing saved for a photo the app hasn't seen before. The sample "
+            "photo above has a saved guide that works without the API, if you want to "
+            "see what this output looks like."
+        )
+        return
+
+    st.info(
+        f"The live model call is unavailable right now ({short_reason}), so this is a "
+        "saved guide for the sample photo rather than one written just now. Everything "
+        "else on this page was still computed live from the photo."
+    )
+    st.markdown(demo_writeup.WRITEUP)
+
+    # Same staleness problem the cache key guards against, one layer up: a guide written
+    # under one rubric and served under a later one is a guide for advice the app no
+    # longer gives. Still shown, because a stale guide beats a red error box, but never
+    # shown as if it were current. test_demo_writeup.py fails on the same mismatch, so the
+    # usual way to find out is by running the checks, not by a visitor reading it.
+    provenance = (
+        f"Written by {demo_writeup.MODEL} on {demo_writeup.GENERATED_ON} from this same "
+        f"photo, using the same rubric and the same measured stats the live call sends."
+    )
+    if demo_writeup.RUBRIC_VERSION != RUBRIC_VERSION:
+        provenance += (
+            f" Saved under rubric {demo_writeup.RUBRIC_VERSION}; the app now runs rubric "
+            f"{RUBRIC_VERSION}, so parts of it may not match the current rubric."
+        )
+    st.caption(provenance)
 
 
 if "use_sample" not in st.session_state:
@@ -322,11 +379,26 @@ if image_bytes is not None:
             with st.spinner("Writing the guide..."):
                 try:
                     writeup = generate_writeup(image_bytes, RUBRIC_VERSION, MODEL_NAME)
+                # AuthenticationError stays first: it subclasses APIStatusError, so the
+                # order of these handlers is what keeps a rejected key from being reported
+                # as a generic status error.
                 except anthropic.AuthenticationError:
-                    st.error("Invalid API key. Check the secret in Streamlit Cloud settings.")
+                    show_saved_guide_or_error(
+                        image_bytes,
+                        "the API key was rejected",
+                        "Invalid API key. Check the secret in Streamlit Cloud settings.",
+                    )
                 except anthropic.APIStatusError as e:
-                    st.error(f"API error: {e.message}")
+                    show_saved_guide_or_error(
+                        image_bytes,
+                        f"the API returned {e.status_code}",
+                        f"API error: {e.message}",
+                    )
                 except anthropic.APIConnectionError:
-                    st.error("Couldn't reach the API. Check your internet connection.")
+                    show_saved_guide_or_error(
+                        image_bytes,
+                        "the API couldn't be reached",
+                        "Couldn't reach the API. Check your internet connection.",
+                    )
                 else:
                     st.markdown(writeup)
