@@ -142,6 +142,10 @@ purpose. Anything else goes in a running v2 list instead of into this branch.
 
 ## Credits and licensing
 
+**The code.** Licensed [MIT](LICENSE). That covers the Python in this repository and
+nothing else. The sample photograph and everything the app derives from it are third-party
+material under a different license, described next.
+
 **The sample photograph.** `assets/sample-dead-vlei.jpg` is "Dead Vlei, Sossusvlei,
 Namibia, 2018-08-06, DD 086" by [Diego Delso](https://delso.photo), from
 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Dead_Vlei,_Sossusvlei,_Namibia,_2018-08-06,_DD_086.jpg),
