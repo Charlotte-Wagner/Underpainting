@@ -12,6 +12,7 @@ from PIL import Image
 
 import demo_writeup
 import rubric
+import supplies
 from gif import encode_gif, frame_durations
 from imaging import (
     STAGE_CAPTIONS,
@@ -223,8 +224,77 @@ def show_saved_guide_or_error(image_bytes, short_reason, error_message):
     st.caption(provenance)
 
 
+def _skip_supplies():
+    st.session_state.supplies_skipped = True
+
+
+def _unskip_supplies():
+    st.session_state.supplies_skipped = False
+
+
+def show_supplies_step():
+    """What to paint on, and what that implies about paint. Skippable by design.
+
+    Placed between the photo and the painting steps, matching the flow this came
+    from, but deliberately not a gate: nothing below depends on the answer and
+    nothing here depends on the photo, so making it blocking would put a form
+    between a visitor and the first thing the app computes. Streamlit renders
+    the whole page top to bottom anyway, so "skip" here means collapse it out of
+    the way rather than advance past it.
+
+    Both controls set their state through on_click callbacks rather than by
+    assigning inside an `if st.button(...)` body, for the same reason
+    _clear_sample is a callback. A button only reports True during the rerun it
+    was clicked in, and by then this function has already decided which branch
+    to draw, so assigning in the body applies the change one rerun late: the
+    step stayed collapsed until some unrelated click happened to rerun the page.
+    Measured, not reasoned about, and it initially read as working precisely
+    because the checks around it were clicking other things in between, which is
+    the same way the S10 sample-button bug hid.
+    """
+    if st.session_state.supplies_skipped:
+        st.button("Show the supplies step", on_click=_unskip_supplies)
+        return
+
+    st.markdown("**What are you painting on?**")
+    st.caption(
+        "This decides which paint makes sense, which is the one supply question "
+        "worth answering before you start. Skip it if you already know."
+    )
+
+    # The chosen surface is kept in our own session key and fed back as the
+    # radio's starting index, rather than being left to the widget. Streamlit
+    # discards the state of any widget a rerun did not draw, so skipping the
+    # step and reopening it silently reset the answer to the first option: the
+    # visitor tells the app they are on watercolor paper, collapses the step,
+    # reopens it, and is being told to buy oils.
+    options = list(supplies.SURFACES)
+    surface = st.radio(
+        "Surface",
+        options,
+        index=options.index(st.session_state.surface_choice),
+        label_visibility="collapsed",
+    )
+    st.session_state.surface_choice = surface
+    guidance = supplies.SURFACES[surface]
+
+    st.markdown(f"**Use:** {guidance['paint']}")
+    st.markdown(f"**Also have on the table:** {guidance['extras']}")
+    if "caveat" in guidance:
+        st.caption(guidance["caveat"])
+    st.caption(supplies.AVOID)
+
+    st.button("Skip this step", on_click=_skip_supplies)
+
+
 if "use_sample" not in st.session_state:
     st.session_state.use_sample = False
+
+if "supplies_skipped" not in st.session_state:
+    st.session_state.supplies_skipped = False
+
+if "surface_choice" not in st.session_state:
+    st.session_state.surface_choice = next(iter(supplies.SURFACES))
 
 
 def _clear_sample():
@@ -313,6 +383,8 @@ if image_bytes is not None:
         # 0.12s of a 0.25s pipeline on the sample photo: a precise-looking
         # number that was wrong by half, which is worse than no number.
         timing_caption = st.empty()
+
+        show_supplies_step()
 
         st.markdown("**Palette and closest tube**")
         st.caption(

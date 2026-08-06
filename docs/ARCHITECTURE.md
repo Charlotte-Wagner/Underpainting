@@ -31,6 +31,10 @@ this file ever outlives the code, that's a bug in the file.
   `build_prompt`, which assembles the rubric, this photo's measured stats, and the
   output-shape instructions into the single prompt sent to the API. No Streamlit
   imports, so the exact prompt text can be printed and diffed from a terminal.
+- **`supplies.py`**: What to paint with, keyed on what you are painting on, plus the two
+  surfaces to avoid. Reference data and prose only, no Streamlit imports and no logic
+  beyond a lookup, the same standard as `paints.py`. Hand-written rather than generated,
+  for the same reason `rubric.py` is.
 - **`demo_writeup.py`**: The saved step-by-step guide for the sample photo, served when
   the live API call fails, plus the rubric version, model, date, and photo hash it was
   generated under. Data only, no Streamlit imports; `app.py` owns the decision of when to
@@ -169,6 +173,25 @@ someone's portrait would be worse than an error; an upload therefore gets the er
 pointer at the sample. And the saved guide records the rubric version it came from, so a
 bumped `RUBRIC_VERSION` with a stale saved guide fails `test_demo_writeup.py` and changes
 the on-screen note, rather than quietly teaching a rubric the app no longer sends.
+
+**The supplies step is skippable, and both of its controls go through callbacks.** It sits
+between the photo and the painting steps, matching the flow it came from, but it is not a
+gate: nothing below it depends on the answer and nothing in it depends on the photo, so
+making it blocking would put a form between a visitor and the first thing the app computes.
+Two state bugs showed up building it, both worth knowing about because both are the same
+shape as bugs this project has already had.
+
+The skip and restore buttons assign through `on_click` callbacks rather than inside an
+`if st.button(...)` body. A button only reports `True` during the rerun it was clicked in,
+by which point the function has already chosen which branch to draw, so assigning in the
+body applies the change one rerun late. It read as working at first only because the checks
+around it clicked other things in between, which is exactly how the S10 sample-button bug
+hid.
+
+The chosen surface is kept in an app-owned session key and fed back as the radio's starting
+index. Streamlit discards the state of any widget a rerun did not draw, so collapsing the
+step and reopening it reset the answer to the first option: a visitor says they are working
+on watercolor paper, skips, reopens, and is being told to buy oils.
 
 **Testing the upload path itself.** The OS file-picker dialog cannot be driven by browser
 automation, which is true and was for several sessions mistakenly treated as meaning the

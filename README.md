@@ -110,6 +110,9 @@ being that the lightest value lands on true white, not short of it (see
   so what survives is structure rather than texture
 - Value study: posterize to 3 and 5 tonal levels, endpoints anchored at true black and
   true white, shown as a tool for checking your own block-in rather than a stage to copy
+- A skippable supplies step: pick what you are painting on and get the paint that suits
+  it, including a note that the tube names below are oils when the chosen surface calls
+  for watercolor or gouache
 - Palette extraction: k-means clustering in Lab color space, 6 swatches sorted by how
   much of the canvas each covers, each matched to the nearest tube in a measured-Lab
   paint reference
