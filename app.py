@@ -99,10 +99,15 @@ MODEL_NAME = "claude-sonnet-5"
 # prompt's own limit, not by cutting the reply off.
 API_MAX_TOKENS = 1500
 
-# Bump this by hand whenever rubric.RUBRIC's text changes. It's part of the
-# cache key below specifically so an edited rubric produces a fresh writeup
-# instead of silently returning a stale cached one for the same photo.
-RUBRIC_VERSION = "v2"
+# Bump this by hand whenever the prompt text changes. It's part of the cache
+# key below specifically so an edited rubric produces a fresh writeup instead
+# of silently returning a stale cached one for the same photo.
+#
+# "The prompt text" is rubric.RUBRIC and also imaging.STAGE_CAPTIONS, which
+# rubric.py interpolates into the step labels it asks the model for. v3 is
+# the S12 stage redesign: both changed at once, since renaming the stages is
+# what forced the rubric rewrite.
+RUBRIC_VERSION = "v3"
 
 
 @st.cache_data(show_spinner=False)
@@ -274,11 +279,29 @@ if image_bytes is not None:
             fine_study = posterize(gray_array, FINE_LEVELS)
             palette = extract_palette(rgb_array)
 
+        # Built here rather than beside the filmstrip, because stage 1 is
+        # also the image at the top of the page and computing the drawing
+        # twice would double the one expensive step on the page.
+        with st.spinner("Finding the shapes and building the four stages..."):
+            stages = build_stages(rgb_array, palette)
+
         col1, col2 = st.columns(2)
         with col1:
             st.image(rgb_array, caption=source_caption)
         with col2:
-            st.image(gray_array, caption="Grayscale")
+            st.image(stages[0], caption="Line drawing")
+
+        # The grayscale copy that sat here until S12 was the one output on
+        # the page with nothing to say about itself, and testing on
+        # non-painters found they could not say what to do with it. The
+        # drawing is the step they were actually missing, and it is the one
+        # the rubric has always said comes first.
+        st.caption(
+            "The biggest shapes and the real edges between them. This is the first "
+            "thing to get down on the canvas, before any paint: an edge only counts "
+            "here if the two sides of it are genuinely different colors, so what "
+            "survives is structure rather than texture."
+        )
 
         # Pixel dimensions are noise to a visitor; processing time is a real
         # signal to a technical one ("this ran in a fraction of a second"),
@@ -290,14 +313,6 @@ if image_bytes is not None:
         # 0.12s of a 0.25s pipeline on the sample photo: a precise-looking
         # number that was wrong by half, which is worse than no number.
         timing_caption = st.empty()
-
-        st.markdown("**Value studies**")
-
-        col3, col4 = st.columns(2)
-        with col3:
-            st.image(coarse_study, caption=f"{COARSE_LEVELS}-value study")
-        with col4:
-            st.image(fine_study, caption=f"{FINE_LEVELS}-value study")
 
         st.markdown("**Palette and closest tube**")
         st.caption(
@@ -343,13 +358,14 @@ if image_bytes is not None:
 
         st.markdown("**Build order**")
         st.caption(
-            "The same photo, computed four independent ways: values only, color "
-            "reduced to the palette above, detail softened, and untouched. Reading "
-            "left to right is the order you would actually build the painting."
+            "The same photo, computed four independent ways: the drawing, then the "
+            "palette above in the darkest and lightest bands only, then the same "
+            "palette with the midtones filled in, then untouched. The flat gray in "
+            "the first two panels is the toned ground, canvas you have not covered "
+            "yet. Reading left to right is the order you would actually build the "
+            "painting."
         )
 
-        with st.spinner("Building the four stages..."):
-            stages = build_stages(rgb_array, palette)
         for column, stage, caption in zip(st.columns(4), stages, STAGE_CAPTIONS):
             with column:
                 st.image(stage, caption=caption)
@@ -363,6 +379,25 @@ if image_bytes is not None:
         st.image(gif_bytes)
 
         timing_caption.caption(f"Processed in {time.time() - start:.2f}s")
+
+        # Below the build order rather than above it as of S12, and framed as
+        # a checking tool rather than a stage to copy. Non-painters shown the
+        # old page could not say what to do with a value study sitting second
+        # from the top with no caption at all; it is a thing you hold your own
+        # block-in against, which only makes sense once there is a block-in.
+        st.markdown("**Value studies**")
+        st.caption(
+            "Not a stage to copy. This is what to check your own block-in against: "
+            "squint at your canvas until the detail drops away, and compare the "
+            "masses that are left against these. Aim for roughly this many, 3 on "
+            "the roughest pass and 5 as it refines, rather than an arbitrary number."
+        )
+
+        col3, col4 = st.columns(2)
+        with col3:
+            st.image(coarse_study, caption=f"{COARSE_LEVELS}-value study")
+        with col4:
+            st.image(fine_study, caption=f"{FINE_LEVELS}-value study")
 
         # Placed after the derived images rather than beside the original,
         # because the ShareAlike note refers to all of them.
