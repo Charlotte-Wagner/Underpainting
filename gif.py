@@ -36,16 +36,26 @@ def _to_image(frame):
 
 
 def _shared_palette(frames, colors=256):
-    """One 256-color palette built from a strip of pixels out of every frame.
+    """One 256-color palette built from rows sampled across every frame.
 
     Pillow quantizes each frame to its own palette by default, so consecutive
     GIF frames end up with slightly different color tables and the animation
     flickers on loop. Sampling rows from every frame into one composite image
     and quantizing that once means every frame that gets matched against it
     afterward shares the identical table.
+
+    The rows are spread evenly down each frame rather than taken as a strip
+    off the top, which is a fix, not a preference. A top strip only represents
+    the frame if the frame is uniform vertically, and S12's line drawing is
+    not: the sample photo's drawing has nothing but flat toned ground in its
+    top quarter, so pure black never reached the sample, never got a palette
+    entry, and every line in the first frame came out rendered in the sky's
+    dark blue. Same class of bug as sampling one photo to tune a constant.
     """
     rows_per_frame = max(1, PALETTE_SAMPLE_ROWS // len(frames))
-    strips = [np.asarray(f, dtype=np.uint8)[:rows_per_frame] for f in frames]
+    height = np.asarray(frames[0]).shape[0]
+    rows = np.unique(np.linspace(0, height - 1, min(rows_per_frame, height)).astype(int))
+    strips = [np.asarray(f, dtype=np.uint8)[rows] for f in frames]
     composite = Image.fromarray(np.concatenate(strips, axis=0), mode="RGB")
     return composite.quantize(colors=colors)
 

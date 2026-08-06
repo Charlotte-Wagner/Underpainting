@@ -14,7 +14,7 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from gif import encode_gif, frame_durations
+from gif import PALETTE_SAMPLE_ROWS, encode_gif, frame_durations
 
 
 def rule(title):
@@ -145,6 +145,51 @@ assert any(naive_lct), (
 print("PASS: the naive path really does flicker, so the shared-palette fix in")
 print("      check 3 is fixing a real thing, not passing on a test that could")
 print("      never fail")
+
+
+# --------------------------------------------------------------------------
+rule("5. A color that only appears low in a frame still gets a palette entry")
+
+# The S12 bug, reduced. The shared palette is built from a sample of rows,
+# and when that sample was a strip off the top of each frame, a color living
+# only in the lower part of a frame never reached the quantizer and got
+# rendered as whatever entry happened to be nearest. Concretely: the line
+# drawing's black lines came out sky blue, because the sample photo's drawing
+# is nothing but flat toned ground across its top quarter.
+#
+# Reproduced here with black only in the bottom half of frame 1 and a strong
+# blue filling the rest of the animation, which is exactly the wrong neighbor
+# to fall back to. The frame count and height matter: PALETTE_SAMPLE_ROWS is
+# split across the frames, so the sample is only a partial strip once there
+# are enough frames, which is why an earlier version of this check passed
+# against the broken sampler too.
+HEIGHT = 200
+rows_sampled = max(1, PALETTE_SAMPLE_ROWS // 16)
+assert rows_sampled < HEIGHT, "frames are too short for the sample to be a strip"
+
+toned = np.full((HEIGHT, 20, 3), 128, dtype=np.uint8)
+toned[HEIGHT // 2:] = 0
+blue = np.full((HEIGHT, 20, 3), (0, 40, 200), dtype=np.uint8)
+low_frames = [toned] + [blue] * 15
+
+data = encode_gif(low_frames, [650] * 16)
+first = np.array(
+    Image.open(BytesIO(data)).convert("RGB")
+)[HEIGHT // 2:]
+print(f"  {rows_sampled} rows of each frame reach the palette, out of {HEIGHT}")
+print(f"  source bottom half: {tuple(toned[-5, 10].tolist())}")
+print(f"  encoded bottom half mean: {tuple(first.mean(axis=(0, 1)).round(1).tolist())}")
+
+# Neutral is the assertion, not exact black: quantization is allowed to be a
+# little off, but it is not allowed to come back blue.
+channel_spread = float(first.mean(axis=(0, 1)).max() - first.mean(axis=(0, 1)).min())
+assert channel_spread < 20, (
+    f"the black region encoded with a {channel_spread:.0f}-unit color cast -- it "
+    "was matched to a colored palette entry, which means it never reached the "
+    "palette sample"
+)
+assert float(first.mean()) < 60, "the black region did not encode as dark"
+print("PASS: a color confined to the bottom of a frame still reaches the palette")
 
 print()
 print("ALL CHECKS PASSED")
