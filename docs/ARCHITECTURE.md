@@ -96,6 +96,16 @@ caveat aimed at a user rather than a reviewer.
 **One decode path, and the sample photo uses it too.** `imaging.load_rgb` is the only
 place bytes become an array. The sample-photo button reads a committed file and hands
 those bytes to the same function an upload goes through, so the sample exercises the real
-pipeline rather than a shortcut around it. That is also what makes the sample button
-usable as an end-to-end test: browser automation cannot open a native file picker, so
-before it existed there was no way to drive the full app from a script.
+pipeline rather than a shortcut around it, and a test script can drive the whole app by
+clicking one button.
+
+**Testing the upload path itself.** The OS file-picker dialog cannot be driven by browser
+automation, which is true and was for several sessions mistakenly treated as meaning the
+upload path could not be tested at all. It can: assign a `DataTransfer`'s `files` to the
+`input[type=file]` element and dispatch a `change` event, and Streamlit processes it as a
+genuine upload. This matters beyond convenience. The difference between "the visitor just
+uploaded this" and "that file has been sitting in the widget for several reruns" is
+invisible to `if uploaded_file is not None`, because `st.file_uploader` returns the same
+file every rerun until it is cleared, and that gap is exactly where a real bug lived. Any
+change to the upload-versus-sample logic should be tested in both orderings, not just from
+a clean page.

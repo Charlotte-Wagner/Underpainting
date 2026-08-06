@@ -33,11 +33,16 @@ st.write("Upload a photo and see how a painter would block it in.")
 MAX_DIMENSION = 1200
 
 # Lets a stranger with no photo of their own see all four outputs on the
-# first try, and gives browser automation something to click: the native
-# file picker can't be driven, so this is the only path that makes the
-# whole app testable end to end. Chosen for full black-to-white range in
-# one frame and strong warm/cool contrast, so it exercises the value
-# study, the palette, and the temperature stat, not just the filmstrip.
+# first try. Chosen for full black-to-white range in one frame and strong
+# warm/cool contrast, so it exercises the value study, the palette, and
+# the temperature stat, not just the filmstrip.
+#
+# It's also the easiest thing for a test script to click, though not the
+# only one: the OS file-picker dialog genuinely can't be driven, but the
+# file input behind it can be populated directly with a DataTransfer, and
+# Streamlit treats that as a real upload. Four sessions' notes said the
+# upload path was untestable; that was true of the dialog and false of
+# the input, and the difference went unchecked until it hid a real bug.
 #
 # The attribution below is a license condition, not decoration. CC BY-SA
 # 4.0 section 3(a)(1) wants the creator named, a link to the source, and
