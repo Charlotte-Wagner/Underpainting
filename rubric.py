@@ -50,9 +50,12 @@ Charlotte's explicit request and on the reasoning that she wanted the pipeline w
 end before tuning wording: the two that had become factually false (the value study "from the
 very first stage", and "the value structure before color" in the Throughline), the clause
 saying value comes first when the drawing now does, the S9 note above, and one added sentence
-tying the toned ground to the gray visible in stages 1 and 2. Everything else is hers
-untouched. Those six are pending her pass and are the only lines in this file a model has
-written.
+tying the toned ground to the gray visible in stages 1 and 2. A seventh change, also hers to
+review: the "This stage confirms the block-in holds up" paragraph, written about soft focus
+and redundant with the squint-and-check paragraph in Full detail, was cut rather than patched,
+on her instruction after she read it flagged. Eighteen paragraphs remain, all of them
+untouched. The patched sentences and the one cut are pending her pass and are the only content
+in this file a session has touched.
 """
 
 from imaging import STAGE_CAPTIONS
@@ -145,10 +148,6 @@ passages are only warmer than what sits beside them, and painting the foreground
 warm to manufacture contrast would be wrong for that photo. When the measured temperature
 disagrees with the first impression, trust the measurement: atmospheric haze in particular
 makes a scene read warm to the eye while measuring distinctly cool.
-
-This stage confirms the block-in holds up before real time goes into detail. Skipping it
-risks a proportion error found too late, when correcting it means scraping back or painting
-over work already finished.
 
 What has to be locked in by the end of this stage: the value structure and the rough color
 relationships. What is still allowed to be messy: edges and small detail.
