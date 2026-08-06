@@ -28,6 +28,10 @@ this file ever outlives the code, that's a bug in the file.
   `build_prompt`, which assembles the rubric, this photo's measured stats, and the
   output-shape instructions into the single prompt sent to the API. No Streamlit
   imports, so the exact prompt text can be printed and diffed from a terminal.
+- **`demo_writeup.py`**: The saved step-by-step guide for the sample photo, served when
+  the live API call fails, plus the rubric version, model, date, and photo hash it was
+  generated under. Data only, no Streamlit imports; `app.py` owns the decision of when to
+  show it and how to label it.
 - **`assets/`**: The committed sample photo the "Try a sample photo" button loads, and
   the build-order GIF used in the README. Both are the same Dead Vlei photograph, which
   is third-party CC BY-SA 4.0 material rather than project code; see the README for
@@ -50,7 +54,9 @@ image, never chained off each other:
    rubric → one Anthropic API call → written step-by-step
 
 Paths 1 through 3 run automatically on load. Path 4 runs only on an explicit button
-click, and its result is cached on (image bytes, rubric version, model).
+click, and its result is cached on (image bytes, rubric version, model). Path 4 is also
+the only one that can fail, since it is the only one that leaves the machine, so it is
+the only one with a fallback: see demo mode below.
 
 ## Decisions that would be easy to get wrong
 
@@ -98,6 +104,19 @@ place bytes become an array. The sample-photo button reads a committed file and 
 those bytes to the same function an upload goes through, so the sample exercises the real
 pipeline rather than a shortcut around it, and a test script can drive the whole app by
 clicking one button.
+
+**Demo mode is scoped to one photo and says so on screen.** A public URL with no
+authentication and a small prepaid balance will eventually run out of credits, so the
+written guide is the one output that can turn into a red error box in front of a visitor.
+When the API call raises, `app.py` serves the saved guide from `demo_writeup.py` instead,
+with a note saying the live call is unavailable and that this text was generated earlier.
+Two constraints shape the rest of it. It only covers the sample photo, decided by hashing
+the bytes on the page against the photo the guide was written from, because there is
+nothing pre-generated for a stranger's upload and a guide describing a dead tree next to
+someone's portrait would be worse than an error; an upload therefore gets the error and a
+pointer at the sample. And the saved guide records the rubric version it came from, so a
+bumped `RUBRIC_VERSION` with a stale saved guide fails `test_demo_writeup.py` and changes
+the on-screen note, rather than quietly teaching a rubric the app no longer sends.
 
 **Testing the upload path itself.** The OS file-picker dialog cannot be driven by browser
 automation, which is true and was for several sessions mistakenly treated as meaning the
