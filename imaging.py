@@ -253,47 +253,365 @@ def dominant_temperature(palette):
     return sum(swatch["lab"][2] * swatch["share"] for swatch in palette)
 
 
+# How many value bands the stages cut the photo into. Three because S5
+# validated three as the count that reads as connected massing. Shared by
+# the value studies, the line drawing's shape labels, and the two color
+# stages, so all of them agree on where a dark stops being a dark.
+STAGE_VALUE_LEVELS = 3
+
+# The toned canvas the first three stages sit on: a mid-value neutral, which
+# is the rubric's own first instruction, and the app is called Underpainting.
+# Not white, and this was measured rather than assumed. With white standing
+# for uncovered canvas, stage 2 of the sample photo came out 81% blank,
+# because the sky and the dune both land in the middle value band, and the
+# pale ground that did get painted was nearly white itself. So white was
+# reading as the lightest value in some places and as nothing at all in
+# others, in the same picture. A mid-value ground can only mean one of those.
+TONED_GROUND = 128
+
+
+# --------------------------------------------------------------------------
+# Line drawing
+#
+# The first thing a painter puts on a canvas is the drawing, and until S12
+# the app never showed it: the filmstrip opened on a value study that
+# non-painters could not read, while the rubric had been saying "get the
+# drawing down first" all along.
+#
+# Two line sources are unioned because they fail in opposite directions.
+# Region outlines can only draw borders between large areas, so anything
+# thin (an earring, a lamp cord) or internal to one area (an eye) is
+# invisible to them by construction. A contrast edge detector sees exactly
+# those and little else. Both then get the same test neither had on its
+# own: is this boundary a real edge, measured as the Lab distance between
+# the two sides' own mean colors.
+#
+# Every constant below is a fraction of the image's own long edge rather
+# than a pixel count, for the same reason soften's radius was: a fixed
+# pixel count means something different on a 400px image than a 1200px one.
+# --------------------------------------------------------------------------
+
+# Median filter applied to the label map before contours are taken. Speckle
+# in a label map becomes a wobbling line, so it is cheaper to remove it here
+# than to filter the lines it would have produced.
+LINE_LABEL_SMOOTHING = 0.02
+
+# Keep the 20 largest shapes overall rather than everything above a fixed
+# area fraction. An area floor is tuned to one photo's complexity by
+# construction: the fraction that keeps a portrait readable buries an
+# interior. A fixed count is the same budget for every photo.
+LINE_KEEP_SHAPES = 20
+
+# The test both line sources were missing. A smooth studio backdrop still
+# gets cut into palette clusters and every cut becomes a border, so the
+# region pass invented wobbling lines across the portrait's background; a
+# gradual sky-to-sand transition has no sharp gradient anywhere, so the
+# edge pass missed the dune ridge entirely. Bands of a backdrop sit a
+# couple of Lab units apart and drop out here, sky against sunlit sand is
+# tens and survives. Same ΔE the paint matching runs.
+LINE_MIN_DELTA_E = 15.0
+
+# Bilateral rather than Gaussian is the whole point of this step: it
+# smooths inside a region while leaving the region's borders sharp, which
+# is the opposite of what a Gaussian does to the edges Canny is about to
+# look for. The Canny thresholds are multiples of each photo's own median
+# gradient, not hand-picked numbers, so nothing here is tuned per photo.
+LINE_BILATERAL_FRACTION = 0.012
+LINE_BILATERAL_SIGMA = 60
+LINE_CANNY_LOW_RATIO = 0.66
+LINE_CANNY_HIGH_RATIO = 1.33
+
+# Texture produces many short disconnected fragments; a feature produces a
+# few long ones. A 1px line's pixel count is its length, so component size
+# is the filter.
+#
+# This pair is the one number on this page that is a taste call rather than
+# a measurement: it decides whether the drawing reads as a loose block-in or
+# a contour illustration, and there is no correct answer to measure toward.
+# Chosen by rendering both ends of the range on all three test photos and
+# picking from the pair, not by tuning until one photo looked right. Raising
+# it further does keep cleaning up the interior, but it is also what starts
+# eating the portrait's earring, so it is not free in either direction.
+LINE_EDGE_MIN_LENGTH = 0.20
+LINE_REGION_MIN_LENGTH = 0.10
+
+# Line weight, and how far in from the frame to stop. The border of the
+# photo is not a line in the drawing; without the margin every image gets
+# a rectangle drawn around it, since the frame is a boundary of every
+# region that touches it.
+LINE_THICKNESS = 0.002
+LINE_EDGE_THICKNESS = 0.0018
+LINE_FRAME_MARGIN = 0.004
+
+
+def nearest_palette_index(rgb, palette):
+    """Index of the nearest palette swatch for every pixel, in Lab.
+
+    The one place a pixel gets assigned to a swatch. recolor_to_palette
+    paints with the result and shape_labels partitions with it, so a change
+    to how "nearest" is decided can't apply to one and miss the other.
+
+    Distance is Lab, the same space the palette itself was clustered in, so
+    a pixel lands in the cluster it would have joined had it been part of
+    the k-means input. Matched at full resolution, not the 200px sample the
+    palette was clustered from: the centroids describe the sample, but every
+    full-res pixel still has a well-defined nearest one.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        palette: list of dicts from extract_palette (each needs "lab").
+
+    Returns:
+        int array (H, W) of indices into palette.
+    """
+    lab = srgb_to_lab(rgb)
+    height, width = lab.shape[:2]
+    flat = lab.reshape(-1, 3)
+    centers = np.array([p["lab"] for p in palette], dtype=np.float32)
+
+    # One (N,) distance array per center, not one (N, k, 3) array of diffs:
+    # k is small (6) but N is up to a few million pixels, and the (N, k, 3)
+    # version peaks at k times the memory for no benefit.
+    distances = np.stack(
+        [np.linalg.norm(flat - center, axis=1) for center in centers], axis=1
+    )
+    return np.argmin(distances, axis=1).reshape(height, width)
+
+
+def value_band_index(gray, n_levels):
+    """Which posterize band each pixel falls in, as 0 .. n_levels - 1.
+
+    posterize returns the band's display value (0, 128, 255 at three
+    levels); this returns the band number. Same quantization, expressed as
+    a label rather than a gray, so it can be combined with another label
+    map without the arithmetic depending on what 255 happens to mean.
+    """
+    step = 255.0 / (n_levels - 1)
+    return np.round(posterize(gray, n_levels).astype(np.float32) / step).astype(np.uint8)
+
+
+def shape_labels(rgb, palette, n_levels=STAGE_VALUE_LEVELS,
+                 smoothing_fraction=LINE_LABEL_SMOOTHING):
+    """Partition the photo into the shapes a painter would block in.
+
+    Color alone merges a lit wall with the same wall in shadow; value alone
+    merges a blue sky with an equally light patch of sand. The product of
+    the two separates both, which is why the label is palette index times
+    n_levels plus value band rather than either one on its own.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        palette: list of dicts from extract_palette.
+        n_levels: number of value bands to cut across the palette clusters.
+        smoothing_fraction: median filter size, fraction of the long edge.
+
+    Returns:
+        uint8 array (H, W) of labels. Values are indices, not meaningful
+        numbers: label 7 is not "between" labels 6 and 8.
+    """
+    rgb = np.asarray(rgb, dtype=np.uint8)
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    long_edge = max(rgb.shape[:2])
+
+    # medianBlur needs an odd kernel and refuses anything below 3.
+    kernel = max(3, int(round(long_edge * smoothing_fraction)) | 1)
+    color = cv2.medianBlur(nearest_palette_index(rgb, palette).astype(np.uint8), kernel)
+    value = cv2.medianBlur(value_band_index(gray, n_levels), kernel)
+    return (color.astype(np.int32) * n_levels + value).astype(np.uint8)
+
+
+def _clear_frame(mask, long_edge, margin_fraction=LINE_FRAME_MARGIN):
+    """Blank a margin all the way around. Modifies and returns mask."""
+    margin = max(2, int(round(long_edge * margin_fraction)))
+    mask[:margin, :] = mask[-margin:, :] = mask[:, :margin] = mask[:, -margin:] = 0
+    return mask
+
+
+def _drop_short_components(mask, long_edge, min_length_fraction):
+    """Keep only connected components at least min_length_fraction long."""
+    count, components, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    keep = np.zeros(count, dtype=bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_length_fraction * long_edge
+    return keep[components].astype(np.uint8)
+
+
+def _thicken(mask, long_edge, thickness_fraction):
+    thickness = max(1, int(round(long_edge * thickness_fraction)))
+    return cv2.dilate(mask, np.ones((thickness, thickness), np.uint8))
+
+
+def region_outlines(rgb, labels, keep_n=LINE_KEEP_SHAPES,
+                    min_delta_e=LINE_MIN_DELTA_E,
+                    min_length_fraction=LINE_REGION_MIN_LENGTH,
+                    thickness_fraction=LINE_THICKNESS):
+    """Borders between the biggest shapes, where the two sides really differ.
+
+    The survivors are redrawn into a clean label map and its boundaries are
+    taken once, rather than each contour being stroked on its own. Two
+    neighboring regions share one border, so stroking per contour draws that
+    border twice, slightly offset, and a shape sitting inside another one
+    gets outlined on top of its parent's fill.
+
+    Each surviving shape's mean Lab is measured from the photo, not from the
+    palette centroid it was labeled with, so the ΔE test compares what is
+    actually on the canvas rather than which cluster index the pixels landed in.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        labels: label map from shape_labels, same H and W.
+        keep_n: how many of the largest shapes to keep, overall.
+        min_delta_e: minimum Lab distance between two shapes for their shared
+            border to count as a line.
+        min_length_fraction: drop components shorter than this fraction of the
+            long edge.
+        thickness_fraction: line weight as a fraction of the long edge.
+
+    Returns:
+        uint8 array (H, W), 1 where a line is, 0 elsewhere.
+    """
+    height, width = labels.shape
+    long_edge = max(height, width)
+
+    candidates = []
+    for level in np.unique(labels):
+        mask = (labels == level).astype(np.uint8)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            candidates.append((cv2.contourArea(contour), contour))
+    candidates.sort(key=lambda c: -c[0])
+
+    # Every shape gets its own index, not its label, so two separate shapes
+    # that happen to share a palette-and-value label still get a line between
+    # them if they touch.
+    cleaned = np.zeros(labels.shape, dtype=np.int32)
+    for index, (_, contour) in enumerate(candidates[:keep_n], start=1):
+        simple = cv2.approxPolyDP(contour, 0.002 * cv2.arcLength(contour, True), True)
+        cv2.drawContours(cleaned, [simple], -1, index, cv2.FILLED)
+
+    lab = srgb_to_lab(rgb)
+    count = int(cleaned.max()) + 1
+    means = np.zeros((count, 3), dtype=np.float32)
+    for index in range(count):
+        pixels = lab[cleaned == index]
+        if len(pixels):
+            means[index] = pixels.mean(axis=0)
+
+    edge = np.zeros((height, width), dtype=np.uint8)
+    for axis in (0, 1):
+        a = cleaned[:, :-1] if axis else cleaned[:-1, :]
+        b = cleaned[:, 1:] if axis else cleaned[1:, :]
+        keep = (a != b) & (np.linalg.norm(means[a] - means[b], axis=-1) >= min_delta_e)
+        if axis:
+            edge[:, :-1] |= keep.astype(np.uint8)
+        else:
+            edge[:-1, :] |= keep.astype(np.uint8)
+
+    _clear_frame(edge, long_edge)
+    # A boundary that survives the ΔE test in scattered patches is not a line,
+    # it is dirt, and it is the same dirt the edge pass produces.
+    edge = _drop_short_components(edge, long_edge, min_length_fraction)
+    return _thicken(edge, long_edge, thickness_fraction)
+
+
+def contrast_edges(rgb, min_length_fraction=LINE_EDGE_MIN_LENGTH,
+                   thickness_fraction=LINE_EDGE_THICKNESS):
+    """Canny edges on a bilateral-filtered copy, long fragments only.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        min_length_fraction: drop components shorter than this fraction of the
+            long edge. This is the looseness knob for the whole drawing.
+        thickness_fraction: line weight as a fraction of the long edge.
+
+    Returns:
+        uint8 array (H, W), 1 where a line is, 0 elsewhere.
+    """
+    rgb = np.asarray(rgb, dtype=np.uint8)
+    long_edge = max(rgb.shape[:2])
+
+    diameter = max(5, int(round(long_edge * LINE_BILATERAL_FRACTION)) | 1)
+    smooth = cv2.bilateralFilter(rgb, diameter, LINE_BILATERAL_SIGMA, LINE_BILATERAL_SIGMA)
+    gray = cv2.cvtColor(smooth, cv2.COLOR_RGB2GRAY)
+
+    median = float(np.median(gray))
+    edges = cv2.Canny(
+        gray,
+        int(max(0, LINE_CANNY_LOW_RATIO * median)),
+        int(min(255, LINE_CANNY_HIGH_RATIO * median)),
+        L2gradient=True,
+    )
+
+    mask = _drop_short_components(edges, long_edge, min_length_fraction)
+    _clear_frame(mask, long_edge)
+    return _thicken(mask, long_edge, thickness_fraction)
+
+
+def line_drawing(rgb, palette, edge_min_length=LINE_EDGE_MIN_LENGTH,
+                 region_min_length=LINE_REGION_MIN_LENGTH):
+    """Stage 1: the drawing, in black on the toned ground.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        palette: the same palette extract_palette returned for this rgb, so
+            the shapes outlined are the ones the color stages will fill.
+        edge_min_length: contrast-edge fragment filter, fraction of long edge.
+        region_min_length: region-outline fragment filter, same units.
+
+    Returns:
+        uint8 sRGB array (H, W, 3), TONED_GROUND with black lines.
+    """
+    rgb = np.asarray(rgb, dtype=np.uint8)
+    lines = region_outlines(
+        rgb, shape_labels(rgb, palette), min_length_fraction=region_min_length
+    ) | contrast_edges(rgb, min_length_fraction=edge_min_length)
+
+    canvas = np.full(rgb.shape, TONED_GROUND, dtype=np.uint8)
+    canvas[lines.astype(bool)] = 0
+    return canvas
+
+
 # --------------------------------------------------------------------------
 # Stage generation
 #
-# Four independent views of the same source image, one per axis of
-# information: value count, then color count, then detail, then nothing.
-# Each is computed straight from the untouched rgb array, never from another
-# stage's output. Chaining would compound each stage's own approximation
-# into the next one, and the last stage would drift off the actual photo
-# instead of being it.
+# Four views of the same source image, in the order a painter builds them:
+# the drawing, the two ends of the value range in color, the midtones, then
+# the photo. Each is computed straight from the untouched rgb array, never
+# from another stage's output. Chaining would compound each stage's own
+# approximation into the next one, and the last stage would drift off the
+# actual photo instead of being it.
+#
+# Stages 2 and 3 paint with the same six swatches the palette panel shows,
+# so the filmstrip stays tied to the palette rather than being an unrelated
+# output that happens to sit near it.
 # --------------------------------------------------------------------------
-
-STAGE_VALUE_LEVELS = 3
-STAGE_BLUR_FRACTION = 0.02
 
 # Labels for build_stages's four outputs, in order. Single source of truth:
 # app.py uses these as filmstrip captions and rubric.py uses the same
 # strings as the step labels it asks the model for, so the written guide
 # and the images point at each other instead of running two numbering
 # schemes that can drift apart.
-STAGE_CAPTIONS = ["1 · Values", "2 · Color masses", "3 · Soft focus", "4 · Full detail"]
+STAGE_CAPTIONS = [
+    "1 · Drawing",
+    "2 · Darks and lights",
+    "3 · Midtones",
+    "4 · Full detail",
+]
 
 
 def value_block_in(rgb, n_levels=STAGE_VALUE_LEVELS):
-    """Stage 1: values only. Grayscale, posterized, put back on 3 channels.
+    """The value study, as an RGB array. Grayscale, posterized, on 3 channels.
 
-    Reuses posterize at the same n_levels already validated in S5 as the one
-    that reads as connected massing, so this is the same value study, not a
-    new decision.
+    No longer one of the four stages as of S12, but still the thing the
+    value-studies panel shows and still what the GIF-free part of the page
+    is checked against, so it keeps its own function rather than being
+    inlined into app.py's two st.image calls.
     """
     gray = cv2.cvtColor(np.asarray(rgb, dtype=np.uint8), cv2.COLOR_RGB2GRAY)
     return cv2.cvtColor(posterize(gray, n_levels), cv2.COLOR_GRAY2RGB)
 
 
 def recolor_to_palette(rgb, palette):
-    """Stage 2: color count only. Every pixel snapped to its nearest palette color.
-
-    Distance is Lab, the same space the palette itself was clustered in, so a
-    pixel lands in the cluster it would have joined had it been part of the
-    k-means input. Matched at full resolution, not the 200px sample the
-    palette was clustered from: the centroids describe the sample, but every
-    full-res pixel still has a well-defined nearest one.
+    """Stage 3: every pixel snapped to its nearest palette color.
 
     Args:
         rgb: uint8 sRGB array (H, W, 3).
@@ -302,43 +620,55 @@ def recolor_to_palette(rgb, palette):
     Returns:
         uint8 sRGB array (H, W, 3), containing only the palette's own colors.
     """
-    lab = srgb_to_lab(rgb)
-    height, width = lab.shape[:2]
-    flat = lab.reshape(-1, 3)
-    centers = np.array([p["lab"] for p in palette], dtype=np.float32)
     colors = np.array([p["rgb"] for p in palette], dtype=np.uint8)
-
-    # One (N,) distance array per center, not one (N, k, 3) array of diffs:
-    # k is small (6) but N is up to a few million pixels, and the (N, k, 3)
-    # version peaks at k times the memory for no benefit.
-    distances = np.stack(
-        [np.linalg.norm(flat - center, axis=1) for center in centers], axis=1
-    )
-    nearest = np.argmin(distances, axis=1)
-    return colors[nearest].reshape(height, width, 3)
+    return colors[nearest_palette_index(rgb, palette)]
 
 
-def soften(rgb, blur_fraction=STAGE_BLUR_FRACTION):
-    """Stage 3: detail only. Gaussian blur scaled to the image's own size.
+def anchor_masses(rgb, palette, n_levels=STAGE_VALUE_LEVELS):
+    """Stage 2: the darkest and lightest bands only, in palette color.
 
-    A fixed pixel radius means something different on a 400px image than a
-    1200px one. Expressing the radius as a fraction of the long edge keeps
-    the amount of softening visually comparable across photo sizes.
+    The rubric's first value instruction is to place both ends of the range
+    as actual shapes before any midtone, because everything else is judged
+    between those two anchors. This stage is that instruction as a picture:
+    the same palette colors stage 3 uses, but only where the photo is in its
+    darkest or lightest value band. The middle band is left as bare toned
+    ground, so the step from here to stage 3 is exactly the midtones arriving
+    and nothing else.
+
+    Args:
+        rgb: uint8 sRGB array (H, W, 3).
+        palette: list of dicts from extract_palette.
+        n_levels: value bands to cut. The first and last are the anchors, so
+            at the default of 3 exactly one middle band is held back.
+
+    Returns:
+        uint8 sRGB array (H, W, 3): palette colors in the anchor bands,
+        TONED_GROUND everywhere else.
     """
-    height, width = np.asarray(rgb).shape[:2]
-    long_edge = max(height, width)
-    radius = max(1, int(round(long_edge * blur_fraction)))
-    kernel = radius * 2 + 1  # GaussianBlur requires an odd kernel size.
-    return cv2.GaussianBlur(np.asarray(rgb, dtype=np.uint8), (kernel, kernel), 0)
+    rgb = np.asarray(rgb, dtype=np.uint8)
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    bands = value_band_index(gray, n_levels)
+
+    painted = recolor_to_palette(rgb, palette)
+    canvas = np.full(rgb.shape, TONED_GROUND, dtype=np.uint8)
+    anchors = (bands == 0) | (bands == n_levels - 1)
+    canvas[anchors] = painted[anchors]
+    return canvas
 
 
 def build_stages(rgb, palette):
-    """The four stages, in build order: values, color masses, soft focus, full detail.
+    """The four stages: drawing, darks and lights, midtones, full detail.
+
+    The soft-focus stage that sat third until S12 is gone. A Gaussian blur
+    was always standing in for "detail not yet resolved," which is not a
+    thing a painter does to a canvas, and the slot was better spent on the
+    drawing step the rubric had been asking for since S9.
 
     Args:
         rgb: uint8 sRGB array (H, W, 3).
         palette: the same palette extract_palette returned for this rgb, so
-            stage 2 uses the identical clusters shown in the swatches panel.
+            stages 1 through 3 use the identical clusters shown in the
+            swatches panel.
 
     Returns:
         List of 4 uint8 sRGB arrays (H, W, 3), same size as rgb. The last one
@@ -346,9 +676,9 @@ def build_stages(rgb, palette):
     """
     rgb = np.asarray(rgb, dtype=np.uint8)
     return [
-        value_block_in(rgb),
+        line_drawing(rgb, palette),
+        anchor_masses(rgb, palette),
         recolor_to_palette(rgb, palette),
-        soften(rgb),
         rgb,
     ]
 

@@ -36,9 +36,9 @@ import hashlib
 
 # What this text was generated under. app.py compares RUBRIC_VERSION against its own and
 # says so on screen if they have drifted apart; test_demo_writeup.py asserts on all three.
-RUBRIC_VERSION = "v2"
+RUBRIC_VERSION = "v3"
 MODEL = "claude-sonnet-5"
-GENERATED_ON = "2026-08-05"
+GENERATED_ON = "2026-08-06"
 
 # The sample photo this guide describes. A saved guide about a dead tree served next to a
 # different photograph would be worse than no guide at all, so the file it was written
@@ -46,17 +46,17 @@ GENERATED_ON = "2026-08-05"
 SAMPLE_SHA256 = "de5ec2d7613ffaa7971d59a3150748e375aea97ca6ab5935e6518084133fadc8"
 
 WRITEUP = """\
-1 · Values
-Tone your canvas a mid-value gray-tan before anything else, so the pale desert floor and deep blue sky both have room to be judged against it. Rough in the dead tree's silhouette, its twisted trunk and reaching bare branches centered in the frame, plus the dune's slope line and the horizon of pale cracked ground. This photo's measured range runs from true 0 to true 255, so you're allowed a genuine black in the tree's deepest crevices and trunk shadow, and a genuine white in the brightest sunlit sand of the dune crest. Place those two anchors first, then midtone the sky's saturated blue and the dune's mid-orange between them.
+1 · Drawing
+Tone the canvas with a mid-gray wash first and let it dry — this replaces the white ground so both the near-black tree and the pale desert floor can be judged correctly. Then loosely block in the composition: the dead tree standing just left of center, its trunk splitting into a wide web of bare branches reaching up and to the right; the rounded dune rising behind it from lower-left to upper-right; the flat pale sand floor in front, with the low scrubby grass clumps and fallen branch fragments scattered along the base. Get the tree's proportions and branch angles right before anything else — this silhouette carries the whole image.
 
-2 · Color masses
-Block in three color masses across the whole canvas at once: the flat saturated blue sky filling the top two-thirds, the warm burnt-orange dune with its darker striated shadow grooves running down the slope, and the pale bone-white cracked earth in the foreground with dull sage-green grass clumps scattered near the tree's base. The measured temperature here is cool overall (-16.7), which may surprise you since the orange dune looks warm at a glance — keep that orange only warm relative to the blue sky and pale ground beside it, don't push it toward true warm or the sky will feel wrong. The tree itself stays a neutral grayish-brown, not warm.
+2 · Darks and lights
+Place your two anchors. The darkest dark is the tree's trunk and the shadowed crevices in the bark and hollow — this photo's measured range hits true black, so that dark can go all the way down. The lightest light is not the sky (it's a saturated mid-blue) but the small pale marks on the upper branches and the sun-bleached ground — the range also hits true white, so a few bright spots deserve full white, saved for last as the sharpest accents. Squint and find roughly three masses: dark tree, warm dune, pale ground/sky split.
 
-3 · Soft focus
-Squint and check: does the tree's silhouette still read against the dune the way it does in the photo, branches clearly separated from the sky, trunk clearly separated from the orange behind it? Decide edges now — the tree against the sky should stay crisp since that's your subject, but the horizon where pale ground meets dune base can stay soft, and the dune's far edge against the sky can soften too, since neither competes with the tree. Keep the grass clumps and ground cracks loose and unresolved. Lock in that the dune reads as one warm mass and the sky as one flat cool mass before moving on.
+3 · Midtones
+Build the dune's rust-orange gradient and the flat cerulean sky as broad, mostly unified color shapes — the sky especially can stay simple since it's not the subject. The measured temperature reads cool overall (-16.7), because the huge blue sky dominates the average; paint the dune's orange as only relatively warm against that surrounding blue and pale sand, not warm in isolation. Keep the tree's bark color muted and grayish-brown against both. Start deciding edges: the tree's silhouette against the sky should stay crisp, while the dune's base blurring into the pale ground can stay soft.
 
 4 · Full detail
-Step back and confirm the silhouette of the tree still reads correctly at a distance before rendering its bark texture, the gnarled knots, and the pale broken branch stubs. Add the fine cracks and mottled tone variation in the foreground earth, and the individual dry blades in the grass clumps near the trunk and fallen branch. Keep the dune simple — a few directional streaks of darker orange for the wind-carved grooves is enough, it is not the subject. Stop once the tree's silhouette and texture hold up at thumbnail size and the dune and sky remain comparatively simple beside it."""
+Step back and squint: does the tree's branch structure still read against the dune, is the sky-to-dune-to-ground color logic holding, does the tree feel appropriately cool-neutral against the warmer dune. Then add texture — the gnarled bark grooves, the scattered dry grass tufts, the fallen branch pieces in the foreground — but concentrate that detail on the tree itself, since it's the subject. Let the dune and sky stay comparatively simple. Stop once the thumbnail reads correctly and the sky and dune haven't picked up detail that competes with the tree."""
 
 
 def matches_sample(image_bytes):
