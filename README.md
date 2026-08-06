@@ -50,8 +50,9 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 4. Add an API key, only needed for the "Generate step-by-step guide" button.
-#    Everything else runs with no key at all. See .env.example for the
-#    variable name; get a real key at console.anthropic.com.
+#    Everything else runs with no key at all, and with no key that button
+#    still shows the saved guide for the sample photo. See .env.example for
+#    the variable name; get a real key at console.anthropic.com.
 mkdir -p .streamlit
 echo 'ANTHROPIC_API_KEY = "sk-ant-your-key-here"' > .streamlit/secrets.toml
 
@@ -78,6 +79,7 @@ python test_stages.py      # the four build-order stages, computed independently
 python test_gif.py         # cross-fade GIF, one shared color table (no flicker)
 python test_rubric.py      # the rubric reaches the model prompt unaltered
 python test_stats.py       # value range and dominant temperature measurement
+python test_demo_writeup.py  # the saved fallback guide still matches the rubric and photo
 ```
 
 Each prints its own checks and ends with `ALL CHECKS PASSED`. For a single function by
@@ -113,7 +115,10 @@ being that the lightest value lands on true white, not short of it (see
   painting rubric plus this photo's own measured value range and temperature, gated
   behind an explicit button so it never fires on upload, and cached so the same photo
   doesn't trigger a repeat call
-- Seven check scripts covering the math above (see
+- A demo-mode fallback: if that API call fails, the sample photo falls back to a saved
+  guide generated earlier from the same photo and the same rubric, labeled on screen as
+  saved rather than live, so the page stays complete when the key or the balance is not
+- Eight check scripts covering the math above (see
   [Running the checks](#running-the-checks)), all passing
 - Dev Container config for GitHub Codespaces
 
