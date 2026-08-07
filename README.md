@@ -1,5 +1,7 @@
 # Underpainting
 
+[![checks](https://github.com/Charlotte-Wagner/Underpainting/actions/workflows/checks.yml/badge.svg)](https://github.com/Charlotte-Wagner/Underpainting/actions/workflows/checks.yml)
+
 Underpainting turns a reference photo into a set of study aids for representational
 painting: a simplified value study, a limited paint palette with real tube names, a
 staged build-order preview, and a written step-by-step. It's for painting students
@@ -85,8 +87,15 @@ python test_guide.py       # splitting the written guide into one slice per stag
                            #   including that no text is dropped when it can't
 ```
 
-Each prints its own checks and ends with `ALL CHECKS PASSED`. For a single function by
-hand instead of a full script:
+Each prints its own checks and ends with `ALL CHECKS PASSED`.
+
+[GitHub Actions](.github/workflows/checks.yml) runs all nine on every push and pull
+request, one step per script so a failure names itself without opening a log. They need
+no API key: the workflow runs against a plain checkout with no `.streamlit/secrets.toml`,
+which is checked rather than assumed, and is the reason none of these scripts is allowed
+to depend on the live model call.
+
+For a single function by hand instead of a full script:
 
 ```bash
 python -c "
@@ -134,7 +143,8 @@ being that the lightest value lands on true white, not short of it (see
   guide generated earlier from the same photo and the same rubric, labeled on screen as
   saved rather than live, so the page stays complete when the key or the balance is not
 - Nine check scripts covering the math above (see
-  [Running the checks](#running-the-checks)), all passing
+  [Running the checks](#running-the-checks)), all passing, and run automatically by
+  GitHub Actions on every push and pull request
 - Dev Container config for GitHub Codespaces
 
 **Intentionally out of scope for v1:**
