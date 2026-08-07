@@ -1,0 +1,99 @@
+# Runs the nine check scripts on every push and pull request.
+#
+# WHY THIS EXISTS
+# The scripts have always existed and have always passed; what was missing is anything
+# running them without a person remembering to. Every run before this workflow was typed
+# by hand during a session, which means a pull request could have merged with a failing
+# check and nothing would have said so. This repository has already shipped a build to
+# production that matched no commit (PR #9), so the class of problem is not hypothetical.
+#
+# It does not add a test framework. CLAUDE.md's "Testing approach" is deliberate: the
+# checks are hand-built small-array scripts rather than pytest, and this workflow runs
+# exactly those, unchanged. If a real suite ever replaces them, this file changes by one
+# line per script and nothing else.
+#
+# No secrets. Verified before this was written, by extracting a bare checkout of the
+# tracked files with `git archive HEAD` and running all nine there: they pass with no
+# .streamlit/secrets.toml and no gitignored files present. That is a property worth
+# keeping. A check that needs the API key would put the key in CI, and the one rule in
+# CLAUDE.md with no exceptions is that the key never leaves st.secrets.
+
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch makes the first run's answer irrelevant, so cancel it
+# rather than paying for both and reading the stale one.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      # v7 on both, pinned to a major version so patch fixes arrive without a commit.
+      # Not the newest-is-best reflex: v4 and v5 declare node20, which GitHub has
+      # retired, so the first run of this workflow passed only because the runner
+      # forced them onto node24 and said so in an annotation. A warning that becomes
+      # an error on GitHub's schedule rather than ours is the kind of thing that turns
+      # a badge red months later with nobody watching. v7 declares node24 itself.
+      - uses: actions/checkout@v7
+
+      # 3.12 because that is what this actually ships on: the local venv is 3.12.10 and
+      # Streamlit Cloud runs 3.12. The devcontainer pins 3.11, which is a known and
+      # separate inconsistency; CI testing a version production does not use would be
+      # measuring the wrong thing.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: pip install -r requirements.txt
+
+      # One step per script rather than a loop, so the Actions tab names which check
+      # failed without anyone opening a log. `!cancelled()` on each keeps the rest
+      # running after one fails: the scripts cover independent modules, so "posterize
+      # broke" and "did anything else break too" are two different questions and the
+      # second one is worth an answer on the same run.
+      - name: Value study, posterize anchored at true black and white
+        if: ${{ !cancelled() }}
+        run: python test_posterize.py
+
+      - name: K-means palette clustering in Lab
+        if: ${{ !cancelled() }}
+        run: python test_palette.py
+
+      - name: Nearest-tube paint matching by measured Lab distance
+        if: ${{ !cancelled() }}
+        run: python test_paints.py
+
+      - name: The four build-order stages, computed independently
+        if: ${{ !cancelled() }}
+        run: python test_stages.py
+
+      - name: Cross-fade GIF, one shared color table
+        if: ${{ !cancelled() }}
+        run: python test_gif.py
+
+      - name: The rubric reaches the model prompt unaltered
+        if: ${{ !cancelled() }}
+        run: python test_rubric.py
+
+      - name: Value range and dominant temperature measurement
+        if: ${{ !cancelled() }}
+        run: python test_stats.py
+
+      - name: The saved fallback guide still matches the rubric and photo
+        if: ${{ !cancelled() }}
+        run: python test_demo_writeup.py
+
+      - name: Splitting the written guide into one slice per stage
+        if: ${{ !cancelled() }}
+        run: python test_guide.py

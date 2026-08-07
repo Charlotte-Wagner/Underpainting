@@ -38,6 +38,13 @@ substitute for a full suite while the project is this small, not a placeholder f
 that quietly never arrives. If a real test suite gets added, it belongs alongside the
 module it tests and should keep using the same small-array style of check.
 
+The checks do run automatically, which is a different thing from having a framework.
+`.github/workflows/checks.yml` runs all nine scripts on every push and pull request, one
+step per script. Two rules follow from it. A new check script has to be added to that
+workflow or it is a script nobody runs. And no check may depend on the API key: they are
+verified to pass against a bare checkout with no `.streamlit/secrets.toml`, and keeping
+that true is what keeps the key out of CI.
+
 ## Scope
 
 v1 is fixed: upload a photo, get a value study, a palette with paint names, an animated
