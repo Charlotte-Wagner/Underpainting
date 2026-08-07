@@ -37,13 +37,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # v7 on both, pinned to a major version so patch fixes arrive without a commit.
+      # Not the newest-is-best reflex: v4 and v5 declare node20, which GitHub has
+      # retired, so the first run of this workflow passed only because the runner
+      # forced them onto node24 and said so in an annotation. A warning that becomes
+      # an error on GitHub's schedule rather than ours is the kind of thing that turns
+      # a badge red months later with nobody watching. v7 declares node24 itself.
+      - uses: actions/checkout@v7
 
       # 3.12 because that is what this actually ships on: the local venv is 3.12.10 and
       # Streamlit Cloud runs 3.12. The devcontainer pins 3.11, which is a known and
       # separate inconsistency; CI testing a version production does not use would be
       # measuring the wrong thing.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
