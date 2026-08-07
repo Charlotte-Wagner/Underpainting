@@ -434,9 +434,14 @@ if image_bytes is not None:
             "palette above in the darkest and lightest bands only, then the same "
             "palette with the midtones filled in, then untouched. The flat gray in "
             "the first two panels is the toned ground, canvas you have not covered "
-            "yet. Reading left to right is the order you would actually build the "
+            "yet. They are numbered in the order you would actually build the "
             "painting."
         )
+
+        # Numbered rather than "left to right" on purpose. Streamlit stacks
+        # st.columns vertically below its mobile breakpoint, so on a phone
+        # these four panels read top to bottom and a direction in the text is
+        # simply wrong there. The numbers are in the captions either way.
 
         for column, stage, caption in zip(st.columns(4), stages, STAGE_CAPTIONS):
             with column:
