@@ -39,6 +39,12 @@ this file ever outlives the code, that's a bug in the file.
   the live API call fails, plus the rubric version, model, date, and photo hash it was
   generated under. Data only, no Streamlit imports; `app.py` owns the decision of when to
   show it and how to label it.
+- **`guide.py`**: Cuts a written guide into one slice per stage, by finding the
+  `STAGE_CAPTIONS` labels `rubric.py` asked the model for. Text in, text out, no
+  Streamlit imports, so it is checkable against hand-typed strings rather than only
+  through the browser. It returns `None` rather than a partly filled list when the labels
+  are not all there in order, which is what lets `app.py` fall back to showing the guide
+  whole instead of showing it with holes in it.
 - **`assets/`**: The committed sample photo the "Try a sample photo" button loads, and
   the build-order GIF used in the README. Both are the same Dead Vlei photograph, which
   is third-party CC BY-SA 4.0 material rather than project code; see the README for
@@ -67,10 +73,11 @@ clusters define, and stages 2 and 3 paint with the palette's own six colors. Tha
 one place the four paths touch, and it is deliberate. The filmstrip showing colors the
 swatch panel does not is the version where the two outputs look unrelated.
 
-Paths 1 through 3 run automatically on load. Path 4 runs only on an explicit button
-click, and its result is cached on (image bytes, rubric version, model). Path 4 is also
-the only one that can fail, since it is the only one that leaves the machine, so it is
-the only one with a fallback: see demo mode below.
+Paths 1 through 3 run automatically on load, all inside one `prepare_photo` cached on
+(image bytes, max dimension), so they run once per photo rather than once per rerun. Path
+4 runs only on an explicit button click, and its result is cached on (image bytes, rubric
+version, model). Path 4 is also the only one that can fail, since it is the only one that
+leaves the machine, so it is the only one with a fallback: see demo mode below.
 
 ## Decisions that would be easy to get wrong
 
@@ -124,6 +131,29 @@ better demo than a configurable one.
 script on every interaction, so an automatic call on upload would mean an unauthenticated
 public page can trigger unbounded API spend. One click, one call.
 
+That constraint is what shapes the step-at-a-time build order added in S14. The four
+stages used to be four panels in a row; they are now one panel with Back and Next, which
+turns a visit from near-zero clicks into four to seven, and every one of those clicks is a
+full rerun of this file. Three things follow, all of them measured rather than assumed.
+The call stays inside the button's own `if` body, so it fires on the click rerun and no
+other: instrumented across one Generate click and twenty navigation and photo-switch
+clicks, the API was called exactly once. The guide is held in session state rather than
+recomputed, because a button reports True for a single rerun and the guide would otherwise
+vanish on the visitor's next click. And the guide is stored beside a hash of the photo it
+was written from, so switching photos drops it instead of describing a dead tree beside
+somebody's kitchen: the same wrongness demo mode's `matches_sample` prevents, reached from
+a different direction.
+
+**Back and Next set state through `on_click` callbacks, not from inside an `if
+st.button(...)` body.** A button only reports True during the rerun it was clicked in, and
+by then the wizard has already read the step number and drawn a stage, so assigning in the
+body moves the visitor one rerun late: Next appears dead until some unrelated click
+happens to rerun the page. S12 shipped that bug twice in the supplies step, where it
+initially read as working only because the checks around it were clicking other things in
+between. The ends are disabled rather than hidden, so the controls keep the same shape at
+every step and nothing shifts position under a thumb; measured at a 375px viewport, the
+panel and both controls sit at the same y on all four steps.
+
 **The build-order GIF shares one color table across every frame instead of letting
 Pillow quantize each frame separately.** Pillow's default is a per-frame palette, which
 makes consecutive frames pick slightly different color tables and the animation flicker
@@ -173,6 +203,21 @@ someone's portrait would be worse than an error; an upload therefore gets the er
 pointer at the sample. And the saved guide records the rubric version it came from, so a
 bumped `RUBRIC_VERSION` with a stale saved guide fails `test_demo_writeup.py` and changes
 the on-screen note, rather than quietly teaching a rubric the app no longer sends.
+
+**The written guide is split on the labels the prompt asked for, and shown whole when it
+can't be.** `rubric.OUTPUT_INSTRUCTIONS` asks for four steps headed by the exact
+`STAGE_CAPTIONS` strings, so the split is finding those four labels and cutting between
+them. What the prompt asks for and what comes back are still different questions, so the
+splitter was written against real replies rather than against the instruction: three were
+checked, the saved sample guide plus live calls on two other photos, and all three used
+the bare label on its own line. A model is free to wrap that same label in a header or
+bold on any future call, so the match is made on a line stripped of markdown decoration.
+The failure mode being designed against is silent text loss, since a splitter that drops a
+paragraph when formatting shifts is worse than the single block it replaced. Hence nothing
+is discarded (text above the first label joins the first slice) and failure is total
+rather than partial (a missing or out-of-order label returns `None`, and `app.py` prints
+the guide unsliced under a note saying so). The saved fallback guide goes down this same
+path rather than around it.
 
 **The supplies step is skippable, and both of its controls go through callbacks.** It sits
 between the photo and the painting steps, matching the flow it came from, but it is not a
