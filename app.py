@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import time
 from io import BytesIO
 from pathlib import Path
@@ -14,6 +15,7 @@ import demo_writeup
 import rubric
 import supplies
 from gif import encode_gif, frame_durations
+from guide import split_guide
 from imaging import (
     STAGE_CAPTIONS,
     build_stages,
@@ -111,6 +113,76 @@ API_MAX_TOKENS = 1500
 RUBRIC_VERSION = "v3"
 
 
+class UnreadableImage(Exception):
+    """The uploaded bytes could not be decoded as an image.
+
+    Named rather than caught as a bare Exception around the whole pipeline, so the
+    on-screen "try a JPEG, PNG, or HEIC" message stays attached to the one failure it
+    actually describes. Everything else in prepare_photo runs on an array that already
+    decoded, and telling a visitor their file is unreadable when the palette clustering
+    is what broke would send them off fixing the wrong thing.
+    """
+
+
+@st.cache_data(show_spinner=False)
+def prepare_photo(image_bytes, max_dimension):
+    """Every image computed from the photo, done once per photo instead of once per rerun.
+
+    Streamlit reruns the whole script on every interaction, and as of S14 the build order
+    is a wizard, so a visit is 4 to 7 clicks rather than the near-zero it used to be.
+    Measured before this was added: 0.49 to 0.55s per rerun across the three test photos
+    (0.44 to 0.50s for the studies, palette, and stages; 0.05 to 0.06s for the GIF). That
+    is a few seconds of recomputing images that cannot have changed, since nothing a Next
+    click touches is an input to any of them.
+
+    Keyed on (image_bytes, max_dimension) rather than on the decoded array, for the same
+    reason generate_writeup is keyed on bytes: they are two simple hashable values, and
+    the rgb array is a pure function of them, so hashing the array would be the same
+    cache key arrived at slower. Everything downstream is likewise deterministic given
+    that array, which is what makes one entry per photo correct rather than merely cheap.
+
+    Args:
+        image_bytes: raw bytes of the uploaded file, unresized.
+        max_dimension: longest edge to resize to, see MAX_DIMENSION.
+
+    Returns:
+        Dict of the rgb array, the two value studies, the palette, the four stages, the
+        encoded GIF, and "seconds", the wall time this took. The timing is measured in
+        here rather than around the call on purpose: it is the cost of processing the
+        photo, which is what the caption on screen claims it is. Timed at the call site
+        it would read as 0.01s on every rerun after the first, which is a true statement
+        about a cache hit and a false one about the pipeline.
+    """
+    started = time.time()
+
+    try:
+        rgb = load_rgb(image_bytes, max_dimension)
+    except Exception as e:
+        raise UnreadableImage from e
+
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    palette = extract_palette(rgb)
+
+    # Built here rather than beside the filmstrip, because stage 1 is also the
+    # image at the top of the page and computing the drawing twice would double
+    # the one expensive step on the page.
+    stages = build_stages(rgb, palette)
+
+    gif_stages = [downsample(stage, GIF_MAX_PX) for stage in stages]
+    gif_frames = cross_fade_frames(gif_stages, FADE_FRAMES)
+    gif_durations = frame_durations(len(gif_stages), FADE_FRAMES)
+
+    return {
+        "rgb": rgb,
+        "coarse_study": posterize(gray, COARSE_LEVELS),
+        "fine_study": posterize(gray, FINE_LEVELS),
+        "palette": palette,
+        "stages": stages,
+        "gif_bytes": encode_gif(gif_frames, gif_durations),
+        "seconds": time.time() - started,
+    }
+
+
 @st.cache_data(show_spinner=False)
 def generate_writeup(image_bytes, rubric_version, model):
     """Photo + measured stats + rubric -> written step-by-step guide.
@@ -168,7 +240,7 @@ def generate_writeup(image_bytes, rubric_version, model):
     return next(block.text for block in response.content if block.type == "text")
 
 
-def show_saved_guide_or_error(image_bytes, short_reason, error_message):
+def saved_guide_or_error(image_bytes, short_reason, error_message):
     """Demo mode: the saved guide when the live call fails, or an honest error.
 
     Only reachable from a failed call, never from a healthy one, so this cannot quietly
@@ -186,26 +258,31 @@ def show_saved_guide_or_error(image_bytes, short_reason, error_message):
     outage during development still looks like an outage instead of hiding behind a smooth
     fallback.
 
+    Returns rather than renders, as of S14. The saved guide was written as one block and
+    used to be printed as one, but it is a real reply in the same four-label shape as a
+    live one, so it now goes down the identical path: stored, split, and shown a stage at
+    a time beside the matching image. A fallback that rendered itself would have been the
+    one guide on the page that ignored the wizard.
+
     Args:
         image_bytes: the bytes currently being displayed, sample or upload.
         short_reason: visitor-facing phrase for why the live call didn't happen.
         error_message: the operator-facing message, kept from S4, for the no-fallback case.
+
+    Returns:
+        A guide dict in the shape described at store_guide.
     """
     if not demo_writeup.matches_sample(image_bytes):
-        st.error(error_message)
-        st.caption(
-            "There's nothing saved for a photo the app hasn't seen before. The sample "
-            "photo above has a saved guide that works without the API, if you want to "
-            "see what this output looks like."
-        )
-        return
-
-    st.info(
-        f"The live model call is unavailable right now ({short_reason}), so this is a "
-        "saved guide for the sample photo rather than one written just now. Everything "
-        "else on this page was still computed live from the photo."
-    )
-    st.markdown(demo_writeup.WRITEUP)
+        return {
+            "text": None,
+            "notice": error_message,
+            "notice_kind": "error",
+            "caption": (
+                "There's nothing saved for a photo the app hasn't seen before. The sample "
+                "photo above has a saved guide that works without the API, if you want to "
+                "see what this output looks like."
+            ),
+        }
 
     # Same staleness problem the cache key guards against, one layer up: a guide written
     # under one rubric and served under a later one is a guide for advice the app no
@@ -221,7 +298,103 @@ def show_saved_guide_or_error(image_bytes, short_reason, error_message):
             f" Saved under rubric {demo_writeup.RUBRIC_VERSION}; the app now runs rubric "
             f"{RUBRIC_VERSION}, so parts of it may not match the current rubric."
         )
-    st.caption(provenance)
+
+    return {
+        "text": demo_writeup.WRITEUP,
+        "notice": (
+            f"The live model call is unavailable right now ({short_reason}), so this is a "
+            "saved guide for the sample photo rather than one written just now. Everything "
+            "else on this page was still computed live from the photo."
+        ),
+        "notice_kind": "info",
+        "caption": provenance,
+    }
+
+
+def store_guide(guide):
+    """Hold a generated guide across the reruns Next and Back cause.
+
+    The button that produces a guide reports True for exactly one rerun, so without
+    this the guide would appear and then vanish on the visitor's very next click. It
+    is kept beside the hash of the photo it was written from, because the failure that
+    matters here is not losing it but showing it beside the wrong picture: the guide
+    names what is actually in the image, so serving one photo's guide next to another
+    is the same error demo_writeup.matches_sample exists to prevent, arrived at from a
+    different direction.
+
+    A guide dict is: "text", the writeup itself or None when the call failed with
+    nothing saved to fall back on; "notice" and "notice_kind", an on-screen info or
+    error line or None; and "caption", the provenance line under it or None.
+    """
+    st.session_state.guide = guide
+    st.session_state.guide_photo = st.session_state.photo_key
+
+
+def show_guide_notice(guide):
+    """The info or error line for a guide that did not come back live, if there is one."""
+    if guide["notice"]:
+        (st.error if guide["notice_kind"] == "error" else st.info)(guide["notice"])
+    if guide["caption"]:
+        st.caption(guide["caption"])
+
+
+def _step_back():
+    st.session_state.stage_step = max(0, st.session_state.stage_step - 1)
+
+
+def _step_forward():
+    last = len(STAGE_CAPTIONS) - 1
+    st.session_state.stage_step = min(last, st.session_state.stage_step + 1)
+
+
+def show_stage_wizard(stages, slices, hint):
+    """The build order one stage at a time, instead of four panels in a row.
+
+    Both controls set state through on_click callbacks rather than by assigning inside
+    an `if st.button(...)` body, the same as show_supplies_step and for the same
+    measured reason: a button only reports True during the rerun it was clicked in, and
+    by then this function has already read stage_step and decided which stage to draw.
+    Assigning in the body applies the move one rerun late, so Next appears to do nothing
+    until some unrelated click happens to rerun the page. S12 shipped that bug twice in
+    one section; this session repeats the pattern four steps wide, which is the reason
+    the brief called state ordering the real risk here rather than the widget code.
+
+    The ends do not wrap. Back on the drawing and Next on full detail are disabled
+    rather than hidden, so the row of controls keeps the same shape at every step and
+    nothing jumps around under a thumb. The callbacks clamp as well, so the state cannot
+    leave 0 to 3 even if a disabled control were somehow to fire.
+
+    Args:
+        stages: the four stage arrays from imaging.build_stages.
+        slices: one guide slice per stage, or None when there is no guide to show or it
+            could not be split. Never a partially filled list; see guide.split_guide.
+        hint: a short line to show under the panel when there is no slice, or None.
+    """
+    step = st.session_state.stage_step
+    last = len(STAGE_CAPTIONS) - 1
+
+    st.caption(f"Step {step + 1} of {len(STAGE_CAPTIONS)}")
+    st.image(stages[step], caption=STAGE_CAPTIONS[step])
+
+    # Back and Next sit directly under the image rather than under the text, because
+    # Streamlit stacks st.columns vertically below its mobile breakpoint: with the
+    # guide slice in between, a phone visitor would scroll past a full step of writing
+    # to find the control that advances it. Under the image they are within a thumb's
+    # reach of the thing they move in both layouts.
+    # width="stretch" rather than use_container_width=True: the latter is
+    # deprecated as of the pinned Streamlit 1.60 and warns on every rerun.
+    # Stretched so the two controls are the same size and a thumb cannot land
+    # between them on a phone.
+    back_column, next_column = st.columns(2)
+    with back_column:
+        st.button("Back", on_click=_step_back, disabled=step == 0, width="stretch")
+    with next_column:
+        st.button("Next", on_click=_step_forward, disabled=step == last, width="stretch")
+
+    if slices is not None:
+        st.markdown(slices[step])
+    elif hint:
+        st.caption(hint)
 
 
 def _skip_supplies():
@@ -296,6 +469,18 @@ if "supplies_skipped" not in st.session_state:
 if "surface_choice" not in st.session_state:
     st.session_state.surface_choice = next(iter(supplies.SURFACES))
 
+if "stage_step" not in st.session_state:
+    st.session_state.stage_step = 0
+
+if "guide" not in st.session_state:
+    st.session_state.guide = None
+
+if "photo_key" not in st.session_state:
+    st.session_state.photo_key = None
+
+if "guide_photo" not in st.session_state:
+    st.session_state.guide_photo = None
+
 
 def _clear_sample():
     """Touching the uploader is an explicit choice to stop using the sample.
@@ -335,25 +520,27 @@ else:
     image_bytes = None
 
 if image_bytes is not None:
-    start = time.time()
+    # A different photo invalidates both the step position and any guide on the page.
+    # Done here, before anything renders, rather than in the uploader's on_change and
+    # the sample button's body: those are two entry points and this is one, and the
+    # check is on the bytes themselves, so it is also right for the case neither
+    # callback sees, a visitor uploading a second copy of the file already loaded.
+    photo_key = hashlib.sha256(image_bytes).hexdigest()
+    if photo_key != st.session_state.photo_key:
+        st.session_state.photo_key = photo_key
+        st.session_state.stage_step = 0
+
     try:
-        with st.spinner("Reading your photo..."):
-            rgb_array = load_rgb(image_bytes, MAX_DIMENSION)
-    except Exception:
+        with st.spinner("Reading your photo and building the stages..."):
+            photo = prepare_photo(image_bytes, MAX_DIMENSION)
+    except UnreadableImage:
         st.error("Couldn't read that file as an image. Try a JPEG, PNG, or HEIC photo.")
     else:
-        with st.spinner("Building the value study and palette..."):
-            gray_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2GRAY)
-
-            coarse_study = posterize(gray_array, COARSE_LEVELS)
-            fine_study = posterize(gray_array, FINE_LEVELS)
-            palette = extract_palette(rgb_array)
-
-        # Built here rather than beside the filmstrip, because stage 1 is
-        # also the image at the top of the page and computing the drawing
-        # twice would double the one expensive step on the page.
-        with st.spinner("Finding the shapes and building the four stages..."):
-            stages = build_stages(rgb_array, palette)
+        rgb_array = photo["rgb"]
+        palette = photo["palette"]
+        stages = photo["stages"]
+        coarse_study = photo["coarse_study"]
+        fine_study = photo["fine_study"]
 
         col1, col2 = st.columns(2)
         with col1:
@@ -377,12 +564,14 @@ if image_bytes is not None:
         # signal to a technical one ("this ran in a fraction of a second"),
         # so it stays and the dimensions go.
         #
-        # Reserved here and filled in after the GIF, because the honest number
-        # is the one the visitor actually waited through. Timing only as far
-        # as the palette and printing that next to the first image reported
-        # 0.12s of a 0.25s pipeline on the sample photo: a precise-looking
-        # number that was wrong by half, which is worse than no number.
-        timing_caption = st.empty()
+        # The number comes out of prepare_photo rather than from a timer around
+        # it, which is also what retired the st.empty placeholder that used to
+        # sit here waiting for the GIF. Two ways this has been wrong before, and
+        # the honest number avoids both: timing only as far as the palette
+        # reported 0.12s of a 0.25s pipeline, and timing at the call site would
+        # now report a cache hit on every Next click, which is a true number
+        # about the wrong thing.
+        st.caption(f"Processed in {photo['seconds']:.2f}s")
 
         show_supplies_step()
 
@@ -433,29 +622,105 @@ if image_bytes is not None:
             "The same photo, computed four independent ways: the drawing, then the "
             "palette above in the darkest and lightest bands only, then the same "
             "palette with the midtones filled in, then untouched. The flat gray in "
-            "the first two panels is the toned ground, canvas you have not covered "
+            "the first two stages is the toned ground, canvas you have not covered "
             "yet. They are numbered in the order you would actually build the "
             "painting."
         )
 
-        # Numbered rather than "left to right" on purpose. Streamlit stacks
-        # st.columns vertically below its mobile breakpoint, so on a phone
-        # these four panels read top to bottom and a direction in the text is
-        # simply wrong there. The numbers are in the captions either way.
+        # The animation moved above the steps in S14, from directly below the four
+        # panels that used to sit here. That position was only ever right on a
+        # desktop, where the panels were one row about a panel tall and the loop
+        # landed under them as a summary of the row. Stacked on a phone the same
+        # placement put it 4,700px down a 6,101px page, below everything it was
+        # summarizing, and the relationship it was meant to carry was gone. Above
+        # the steps it reads the same way in both layouts: the whole thing at a
+        # glance, then the same thing one stage at a time.
+        st.image(
+            photo["gif_bytes"],
+            caption="All four stages in one loop, before stepping through them.",
+        )
 
-        for column, stage, caption in zip(st.columns(4), stages, STAGE_CAPTIONS):
-            with column:
-                st.image(stage, caption=caption)
+        # The button sits above the wizard, and the guide it produces is read back
+        # below, which is the ordering the whole section depends on: a click is
+        # reported for exactly one rerun, so a button drawn after the panel it feeds
+        # would deliver its guide one rerun late. This is the same trap the two S12
+        # supplies bugs fell into, avoided here by page order rather than by a
+        # callback, because unlike Back and Next this one has real work to do and a
+        # spinner to show while it does it.
+        st.caption(
+            "Optional. Sends this photo, plus its measured value range and dominant "
+            "temperature, to Claude for a written guide, one part beside each stage "
+            "below. This is the only thing on the page that calls a model."
+        )
 
-        with st.spinner("Encoding the animation..."):
-            gif_stages = [downsample(stage, GIF_MAX_PX) for stage in stages]
-            gif_frames = cross_fade_frames(gif_stages, FADE_FRAMES)
-            gif_durations = frame_durations(len(gif_stages), FADE_FRAMES)
-            gif_bytes = encode_gif(gif_frames, gif_durations)
+        if st.button("Generate step-by-step guide"):
+            with st.spinner("Writing the guide..."):
+                try:
+                    writeup = generate_writeup(image_bytes, RUBRIC_VERSION, MODEL_NAME)
+                # AuthenticationError stays first: it subclasses APIStatusError, so the
+                # order of these handlers is what keeps a rejected key from being reported
+                # as a generic status error.
+                except anthropic.AuthenticationError:
+                    store_guide(saved_guide_or_error(
+                        image_bytes,
+                        "the API key was rejected",
+                        "Invalid API key. Check the secret in Streamlit Cloud settings.",
+                    ))
+                except anthropic.APIStatusError as e:
+                    store_guide(saved_guide_or_error(
+                        image_bytes,
+                        f"the API returned {e.status_code}",
+                        f"API error: {e.message}",
+                    ))
+                except anthropic.APIConnectionError:
+                    store_guide(saved_guide_or_error(
+                        image_bytes,
+                        "the API couldn't be reached",
+                        "Couldn't reach the API. Check your internet connection.",
+                    ))
+                else:
+                    store_guide({
+                        "text": writeup,
+                        "notice": None,
+                        "notice_kind": None,
+                        "caption": None,
+                    })
 
-        st.image(gif_bytes)
+        # Only shown beside the photo it was written from. A guide left over from a
+        # previous photo describes things that are no longer on the page, which is
+        # the same wrongness matches_sample guards the saved guide against.
+        guide = st.session_state.guide
+        if guide is not None and st.session_state.guide_photo != photo_key:
+            guide = None
 
-        timing_caption.caption(f"Processed in {time.time() - start:.2f}s")
+        slices = None
+        unsplit = None
+        if guide is not None:
+            show_guide_notice(guide)
+            if guide["text"]:
+                slices = split_guide(guide["text"], STAGE_CAPTIONS)
+                # A guide the split could not account for is still shown, whole and
+                # in one piece, rather than dropped or shown with holes in it. The
+                # wizard keeps working on the images either way, so the worst case
+                # here is the page the visitor would have had before this session.
+                if slices is None:
+                    unsplit = guide["text"]
+
+        show_stage_wizard(
+            stages,
+            slices,
+            hint=None if guide is not None else (
+                "Stepping through the stages does not need the guide. Generate it "
+                "above if you want the writing beside each one."
+            ),
+        )
+
+        if unsplit is not None:
+            st.caption(
+                "The guide did not come back in the four labelled steps this page "
+                "splits on, so here it is whole."
+            )
+            st.markdown(unsplit)
 
         # Below the build order rather than above it as of S12, and framed as
         # a checking tool rather than a stage to copy. Non-painters shown the
@@ -480,37 +745,3 @@ if image_bytes is not None:
         # because the ShareAlike note refers to all of them.
         if st.session_state.use_sample:
             st.caption(SAMPLE_NOTICE)
-
-        st.markdown("**Step-by-step guide**")
-        st.caption(
-            "Sends this photo, plus its measured value range and dominant "
-            "temperature, to Claude for a written stage-by-stage guide."
-        )
-
-        if st.button("Generate step-by-step guide"):
-            with st.spinner("Writing the guide..."):
-                try:
-                    writeup = generate_writeup(image_bytes, RUBRIC_VERSION, MODEL_NAME)
-                # AuthenticationError stays first: it subclasses APIStatusError, so the
-                # order of these handlers is what keeps a rejected key from being reported
-                # as a generic status error.
-                except anthropic.AuthenticationError:
-                    show_saved_guide_or_error(
-                        image_bytes,
-                        "the API key was rejected",
-                        "Invalid API key. Check the secret in Streamlit Cloud settings.",
-                    )
-                except anthropic.APIStatusError as e:
-                    show_saved_guide_or_error(
-                        image_bytes,
-                        f"the API returned {e.status_code}",
-                        f"API error: {e.message}",
-                    )
-                except anthropic.APIConnectionError:
-                    show_saved_guide_or_error(
-                        image_bytes,
-                        "the API couldn't be reached",
-                        "Couldn't reach the API. Check your internet connection.",
-                    )
-                else:
-                    st.markdown(writeup)

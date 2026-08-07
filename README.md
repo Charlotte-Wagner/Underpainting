@@ -81,6 +81,8 @@ python test_gif.py         # cross-fade GIF, one shared color table (no flicker)
 python test_rubric.py      # the rubric reaches the model prompt unaltered
 python test_stats.py       # value range and dominant temperature measurement
 python test_demo_writeup.py  # the saved fallback guide still matches the rubric and photo
+python test_guide.py       # splitting the written guide into one slice per stage,
+                           #   including that no text is dropped when it can't
 ```
 
 Each prints its own checks and ends with `ALL CHECKS PASSED`. For a single function by
@@ -116,18 +118,22 @@ being that the lightest value lands on true white, not short of it (see
 - Palette extraction: k-means clustering in Lab color space, 6 swatches sorted by how
   much of the canvas each covers, each matched to the nearest tube in a measured-Lab
   paint reference
-- The four-stage build-order filmstrip on a toned ground, in the order a painter works:
-  the drawing, the darkest and lightest bands in palette color, the midtones, the
-  untouched photo. Computed independently per stage from the same source photo, with a
-  cross-faded animated GIF sharing one color table
+- The four build-order stages on a toned ground, in the order a painter works: the
+  drawing, the darkest and lightest bands in palette color, the midtones, the untouched
+  photo. Computed independently per stage from the same source photo, with a cross-faded
+  animated GIF sharing one color table
+- A step-at-a-time walkthrough of those four stages, with Back and Next, rather than all
+  four at once: one stage on screen, its written instructions beside it, and the whole
+  photo pipeline cached so stepping does not recompute it
 - A written step-by-step guide from the Anthropic API, built from a hand-written
   painting rubric plus this photo's own measured value range and temperature, gated
-  behind an explicit button so it never fires on upload, and cached so the same photo
-  doesn't trigger a repeat call
+  behind an explicit button so it never fires on upload or on a Back or Next click, and
+  cached so the same photo doesn't trigger a repeat call. It is split into one part per
+  stage, and shown whole if it ever comes back in a shape that can't be split
 - A demo-mode fallback: if that API call fails, the sample photo falls back to a saved
   guide generated earlier from the same photo and the same rubric, labeled on screen as
   saved rather than live, so the page stays complete when the key or the balance is not
-- Eight check scripts covering the math above (see
+- Nine check scripts covering the math above (see
   [Running the checks](#running-the-checks)), all passing
 - Dev Container config for GitHub Codespaces
 
