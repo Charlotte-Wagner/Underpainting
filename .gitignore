@@ -49,6 +49,15 @@ s12-handoff.md
 s13-handoff.md
 s14-brief.md
 s14-handoff.md
+s15-handoff.md
+
+# Design and planning documents dropped into the project folder while working.
+# Ignored by extension rather than by filename because the failure mode is a
+# file nobody remembered to list: "Website flow 2.pdf" sat untracked in the repo
+# root, one `git add .` away from a public commit, and it is the same category as
+# BUILD-PLAN.md. No PDF has ever belonged in this repository's tracked files, so
+# the broad pattern costs nothing and does not depend on anyone naming the next one.
+*.pdf
 
 # line-drawing prototypes and the photos they were measured on: working
 # material for S12, not part of the app
