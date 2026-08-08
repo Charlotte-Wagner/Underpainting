@@ -10,7 +10,10 @@ this file ever outlives the code, that's a bug in the file.
   inputs, calls into `imaging.py` for the actual math, and displays results. Streamlit
   reruns this entire file top to bottom on every user interaction (button click, file
   upload). That's the framework's execution model, not a bug, and it's why the Anthropic
-  call is gated behind an explicit button instead of running automatically.
+  call is gated behind an explicit button instead of running automatically. It is also
+  the only file in the project allowed to import Streamlit, which is what keeps every
+  other module checkable from a plain Python shell, and the reason all four screens
+  live here rather than in a module each.
 - **`imaging.py`**: Pure image-math functions: numpy arrays in, numpy arrays out, zero
   Streamlit imports. Kept separate from `app.py` specifically so a function like
   `posterize` can be imported from a plain Python shell and run against a 4x4 array by
@@ -139,6 +142,27 @@ vanish on the visitor's next click. And the guide is stored beside a hash of the
 was written from, so switching photos drops it instead of describing a dead tree beside
 somebody's kitchen: the same wrongness demo mode's `matches_sample` prevents, reached from
 a different direction.
+
+**Four screens, and the current one is a value in session state.** Streamlit has no
+router. The two ways to get separate pages out of it are `st.navigation` with a `pages/`
+directory, or a "which screen am I on" value that the whole script branches on once, at
+the bottom. This app takes the second. `st.navigation` wants each page's code in a module
+of its own, which would mean more than one file importing Streamlit and would break the
+rule above that keeps every other module runnable from a plain shell. It also gives each
+screen a URL, and the only thing a URL buys here is a way to land a stranger on the
+tutorial screen for a photo that was never uploaded. With session state, the only path
+onto a screen is a button on the screen before it, and the guard at the bottom of
+`app.py` sends anything that needs a photo and has none back to the upload screen.
+
+The cost is real and was accepted rather than talked around: `app.py` is now the router
+as well as the UI, so it is one long file, and the screens cannot be linked, bookmarked,
+or reached with the browser's own Back button.
+
+The photo bytes move between screens in session state for the same reason. Streamlit
+discards the state of any widget a rerun did not draw, and the uploader is only drawn on
+one of the four screens, so the file it returned cannot be read from anywhere else. What
+is stored is the raw bytes, which is also the cache key for `prepare_photo`, so a screen
+change costs a cache lookup rather than a decode.
 
 **Back and Next set state through `on_click` callbacks, not from inside an `if
 st.button(...)` body.** A button only reports True during the rerun it was clicked in, and
