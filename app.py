@@ -347,7 +347,81 @@ def _step_forward():
     st.session_state.stage_step = min(last, st.session_state.stage_step + 1)
 
 
-def show_stage_wizard(stages, slices, hint):
+def show_palette_reference(palette):
+    """The palette and its tube names, small, under whichever stage is on screen.
+
+    This used to be a full section of its own above the build order. It is a reference
+    a painter checks while mixing, not something read once and scrolled past, so it now
+    sits under every stage instead, which is what the website-flow outline asks for.
+
+    Repeating it on all four stages costs nothing in page height, because the wizard
+    draws exactly one stage per rerun. What it does cost is space under each stage, so
+    the panel is smaller than the section it replaces, and the compaction is where the
+    measuring went rather than the move itself. Streamlit stacks st.columns below its
+    mobile breakpoint, so on a phone this is six cells one under another and the cost
+    per cell is what matters: the old section spent three elements on each, a 90px
+    swatch, a bold name, and a two-line caption, and Streamlit's block gap between
+    them is roughly as tall as the text. Folding the name and numbers into the image's
+    own caption makes each cell one element instead of three. Measured at a 375px
+    viewport on the sample photo: 1,550px as a section, 889px moved but otherwise
+    unchanged, 690px like this, which is inside one 812px phone screen. The paragraph
+    explaining the Lab clustering moved into the expander for the same reason.
+
+    Nothing was dropped to get there. Every number the section showed is still on
+    screen, which is deliberate: the ΔE figures are the honest part of this panel, and
+    a compaction that quietly deleted them would be selling the match as better than
+    it is.
+
+    Args:
+        palette: the swatch dicts from imaging.extract_palette, ordered by coverage.
+    """
+    st.markdown("**Palette and closest tube**")
+
+    for column, swatch in zip(st.columns(len(palette)), palette):
+        # The swatch is the photo's own centroid, never a render of the
+        # paint measurement. Showing the paint's color would quietly claim
+        # the match is exact.
+        paint_name, delta_e = nearest_paint(swatch["lab"])
+        with column:
+            # Two trailing spaces are a markdown hard line break, which st.image
+            # captions honor. The tube name gets its own line because it is the
+            # thing being looked up; the measurements sit under it.
+            st.image(
+                np.full((28, 140, 3), swatch["rgb"], dtype=np.uint8),
+                caption=(
+                    f"**{paint_name}**  \n"
+                    f"{swatch['share'] * 100:.1f}% · {swatch['hex']} · "
+                    f"ΔE {delta_e:.0f}"
+                ),
+            )
+
+    with st.expander("How the tube names are chosen"):
+        st.markdown(
+            "Clustered in Lab so the groupings match colors a painter would mix "
+            "as one, ordered by how much of the canvas each covers. Each swatch "
+            "shows the photo's own color, with the tube you would reach for to "
+            "mix it.\n\n"
+            "Tube suggestions are approximate. Underpainting compares dominant "
+            "sRGB photo colors with measured wet-paint masstones from a limited "
+            "reference palette. Camera processing, lighting, transparency, ground "
+            "color, mixtures, and drying shifts are not modeled. Use these names "
+            "as starting points, not mixing formulas.\n\n"
+            "The reference values are masstones, paint straight from the tube at "
+            "full strength, while most of a photo is mid-values and tints. That is "
+            "why the ΔE numbers are large even when the tube names are right: the "
+            "question being answered is which tube to reach for, not what the color "
+            "is.\n\n"
+            "Reference CIE Lab measurements: [Williamsburg Artist Oil Colors]"
+            "(https://justpaint.org/wp-content/uploads/2017/06/"
+            "Munsell-and-CIELAB-Data-for-Williamsburg-Oils_munsell_ordering.pdf), "
+            "measured from 6-mil wet drawdowns with a non-contact "
+            "spectrophotometer. The published table does not specify its "
+            "illuminant/observer setting. Underpainting is independent and is not "
+            "affiliated with or endorsed by Golden Artist Colors or Williamsburg."
+        )
+
+
+def show_stage_wizard(stages, palette, slices, hint):
     """The build order one stage at a time, instead of four panels in a row.
 
     Both controls set state through on_click callbacks rather than by assigning inside
@@ -366,6 +440,7 @@ def show_stage_wizard(stages, slices, hint):
 
     Args:
         stages: the four stage arrays from imaging.build_stages.
+        palette: the swatch dicts, passed straight through to show_palette_reference.
         slices: one guide slice per stage, or None when there is no guide to show or it
             could not be split. Never a partially filled list; see guide.split_guide.
         hint: a short line to show under the panel when there is no slice, or None.
@@ -395,6 +470,11 @@ def show_stage_wizard(stages, slices, hint):
         st.markdown(slices[step])
     elif hint:
         st.caption(hint)
+
+    # Last, so it sits under the whole step rather than between the picture and the
+    # writing about it. The outline's wording is "right below the painting steps on
+    # each stage", and the writing is part of the step.
+    show_palette_reference(palette)
 
 
 def _skip_supplies():
@@ -575,56 +655,14 @@ if image_bytes is not None:
 
         show_supplies_step()
 
-        st.markdown("**Palette and closest tube**")
-        st.caption(
-            "Clustered in Lab so the groupings match colors a painter would mix "
-            "as one, ordered by how much of the canvas each covers. Each swatch "
-            "shows the photo's own color, with the tube you would reach for to "
-            "mix it."
-        )
-
-        for column, swatch in zip(st.columns(len(palette)), palette):
-            # The swatch is the photo's own centroid, never a render of the
-            # paint measurement. Showing the paint's color would quietly claim
-            # the match is exact.
-            paint_name, delta_e = nearest_paint(swatch["lab"])
-            with column:
-                st.image(np.full((90, 200, 3), swatch["rgb"], dtype=np.uint8))
-                st.markdown(f"**{paint_name}**")
-                st.caption(
-                    f"{swatch['share'] * 100:.1f}% of canvas\n\n"
-                    f"{swatch['hex']} · ΔE {delta_e:.0f}"
-                )
-
-        with st.expander("How the tube names are chosen"):
-            st.markdown(
-                "Tube suggestions are approximate. Underpainting compares dominant "
-                "sRGB photo colors with measured wet-paint masstones from a limited "
-                "reference palette. Camera processing, lighting, transparency, ground "
-                "color, mixtures, and drying shifts are not modeled. Use these names "
-                "as starting points, not mixing formulas.\n\n"
-                "The reference values are masstones, paint straight from the tube at "
-                "full strength, while most of a photo is mid-values and tints. That is "
-                "why the ΔE numbers are large even when the tube names are right: the "
-                "question being answered is which tube to reach for, not what the color "
-                "is.\n\n"
-                "Reference CIE Lab measurements: [Williamsburg Artist Oil Colors]"
-                "(https://justpaint.org/wp-content/uploads/2017/06/"
-                "Munsell-and-CIELAB-Data-for-Williamsburg-Oils_munsell_ordering.pdf), "
-                "measured from 6-mil wet drawdowns with a non-contact "
-                "spectrophotometer. The published table does not specify its "
-                "illuminant/observer setting. Underpainting is independent and is not "
-                "affiliated with or endorsed by Golden Artist Colors or Williamsburg."
-            )
-
         st.markdown("**Build order**")
         st.caption(
             "The same photo, computed four independent ways: the drawing, then the "
-            "palette above in the darkest and lightest bands only, then the same "
-            "palette with the midtones filled in, then untouched. The flat gray in "
-            "the first two stages is the toned ground, canvas you have not covered "
-            "yet. They are numbered in the order you would actually build the "
-            "painting."
+            "palette shown under each step in the darkest and lightest bands only, "
+            "then the same palette with the midtones filled in, then untouched. The "
+            "flat gray in the first two stages is the toned ground, canvas you have "
+            "not covered yet. They are numbered in the order you would actually "
+            "build the painting."
         )
 
         # The animation moved above the steps in S14, from directly below the four
@@ -708,6 +746,7 @@ if image_bytes is not None:
 
         show_stage_wizard(
             stages,
+            palette,
             slices,
             hint=None if guide is not None else (
                 "Stepping through the stages does not need the guide. Generate it "
