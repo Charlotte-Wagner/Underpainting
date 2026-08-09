@@ -40,16 +40,17 @@ paint-lut-spec.md
 v2.md
 teaching-rubric-draft.md
 teaching-rubric-edited.md
-s9-brief.md
-s9-handoff.md
-s10-brief.md
-s11-brief.md
-s12-brief.md
-s12-handoff.md
-s13-handoff.md
-s14-brief.md
-s14-handoff.md
-s15-handoff.md
+
+# Per-session briefs and handoffs. By pattern rather than by filename, for the same
+# reason the PDF rule below is by extension: every one of these was added by hand
+# after the file already existed, which means each new session starts with an
+# unignored planning doc in the repo root, one `git add .` from a public commit.
+# S16's handoff was the eleventh in a row to need a line here. The glob covers the
+# ten already listed and every one after it.
+s[0-9]-brief.md
+s[0-9]-handoff.md
+s[0-9][0-9]-brief.md
+s[0-9][0-9]-handoff.md
 
 # Design and planning documents dropped into the project folder while working.
 # Ignored by extension rather than by filename because the failure mode is a
