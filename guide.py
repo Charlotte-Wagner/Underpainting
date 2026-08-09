@@ -1,7 +1,7 @@
 """Cutting the model's written guide into one slice per painting stage.
 
 Text in, text out. No Streamlit imports and no image math, the same standard
-supplies.py and paints.py hold to, so this is checkable against a handful of
+paints.py and rubric.py hold to, so this is checkable against a handful of
 hand-typed strings instead of only through the browser.
 
 WHY THIS IS NOT A ONE-LINER
