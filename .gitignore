@@ -55,9 +55,15 @@ s15-handoff.md
 # Ignored by extension rather than by filename because the failure mode is a
 # file nobody remembered to list: "Website flow 2.pdf" sat untracked in the repo
 # root, one `git add .` away from a public commit, and it is the same category as
-# BUILD-PLAN.md. No PDF has ever belonged in this repository's tracked files, so
-# the broad pattern costs nothing and does not depend on anyone naming the next one.
+# BUILD-PLAN.md. The broad pattern costs nothing and does not depend on anyone
+# naming the next one.
 *.pdf
+
+# The one exception. assets/brand/ holds brand source rather than working notes,
+# and page 2 of the logo sheet carries the wordmark lockup and the on-dark size
+# tests that none of the PNGs beside it reproduce. Scoped to that single directory
+# instead of relaxing *.pdf, so a stray PDF in the repo root is still caught.
+!assets/brand/*.pdf
 
 # line-drawing prototypes and the photos they were measured on: working
 # material for S12, not part of the app
