@@ -30,10 +30,22 @@ from paints import nearest_paint
 
 pillow_heif.register_heif_opener()
 
+# The 260px copy, not the 2229px primary. The mark renders at 46px here and is also
+# the favicon, and sending a phone 1.4MB for either of those is the wrong trade.
+BRAND_MARK_PATH = Path(__file__).parent / "assets" / "brand" / "flower-logo-web.png"
+
+# Has to run before any other st.* call; that is a Streamlit rule, not a preference.
+# The mark is the page icon because the browser tab is the one piece of the app a
+# visitor sees before anything has loaded.
+st.set_page_config(page_title="Underpainting", page_icon=str(BRAND_MARK_PATH))
+
 # On every screen, not just the front page. It is the only thing that says where
 # you are once the upload control is behind you, and there is no browser URL doing
-# that job: the screens are session state, not routes. Charlotte's own title and
-# logo go here when she designs them.
+# that job: the screens are session state, not routes.
+#
+# Mark above wordmark rather than beside it, because st.title's own line height
+# leaves no room to sit a 46px image next to it without fighting the baseline.
+st.image(str(BRAND_MARK_PATH), width=46)
 st.title("Underpainting")
 
 MAX_DIMENSION = 1200
@@ -109,21 +121,26 @@ MODEL_NAME = "claude-sonnet-5"
 # prompt's own limit, not by cutting the reply off.
 API_MAX_TOKENS = 1500
 
-# PLACEHOLDER TEXT, and Charlotte's to replace. The website-flow outline asks for a
-# tutorial page and says the directions are hers to write later, so this constant is a
-# scaffold for her words rather than a decision about what they say. These four are
-# true of the app as it stands, because main stays deployable and a live page showing
-# obvious filler is not deployable. This constant is the only place to change them.
-TUTORIAL_STEPS = (
-    "Work through the four stages in order. Each one is the same photo computed a "
-    "different way, and each is a thing to finish before you move to the next.",
-    "Squint at the stage on screen rather than at your photo. The stages throw away "
-    "detail on purpose, and what is left is the part that has to be right.",
-    "Keep the palette under each stage in view while you mix. It names the closest "
-    "tube to each of the photo's six main colors, ordered by how much of the canvas "
-    "each one covers.",
-    "Generate the written guide below if you want words alongside the pictures. It is "
-    "optional, and the stages work without it.",
+# What the app does, on the front page, under the upload control. This replaces the
+# four numbered instructions that used to sit on the tutorial screen: a visitor who
+# has not uploaded anything yet needs to know what this is, and a visitor who has
+# already uploaded does not need to be told how to look at pictures.
+#
+# Every claim here is checkable against the code rather than aspirational: four stages
+# (imaging.STAGE_CAPTIONS), six palette colors with a tube name each
+# (imaging.PALETTE_SIZE, paints.nearest_paint), two value studies (COARSE_LEVELS and
+# FINE_LEVELS). Keep it that way when editing, per CLAUDE.md's rule about claims.
+#
+# The second paragraph is the only place in the app a visitor learns that the model
+# call is optional and never automatic, which is the decision this codebase is most
+# careful about and is otherwise invisible from the outside.
+FRONT_PAGE_BLURB = (
+    "Underpainting reads your photo and builds the plan a painter would make from "
+    "it: the line drawing, four stages from darks to detail, the six colors that "
+    "cover most of the canvas with the closest tube name for each, and two value "
+    "studies.",
+    "All of that is computed on the spot. A written step-by-step from Claude is one "
+    "optional click.",
 )
 
 # Bump this by hand whenever the prompt text changes. It's part of the cache
@@ -558,7 +575,17 @@ def show_upload_screen():
         st.error(st.session_state.upload_error)
 
     st.caption("No photo handy?")
-    st.button("Try a sample photo", on_click=_use_sample_photo)
+    # Primary for the same reason "Let's start!" is: it is the forward action, here for
+    # the visitor who arrived without a photo. It is also the only accent-colored thing
+    # on the front page, since the uploader's own button is Streamlit's and not ours.
+    st.button("Try a sample photo", on_click=_use_sample_photo, type="primary")
+
+    # Below both ways in rather than above them. The one action on this screen stays
+    # the first thing under the title; the explanation is for the visitor who did not
+    # already know what they came for, and it costs the visitor who did nothing.
+    st.divider()
+    for paragraph in FRONT_PAGE_BLURB:
+        st.caption(paragraph)
 
 
 def show_tutorial_screen(photo):
@@ -603,10 +630,6 @@ def show_tutorial_screen(photo):
     # pipeline, and timing at the call site would now report a cache hit on
     # every click after the first, which is a true number about the wrong thing.
     st.caption(f"Processed in {photo['seconds']:.2f}s")
-
-    st.markdown("**How this works**")
-    for number, step in enumerate(TUTORIAL_STEPS, start=1):
-        st.markdown(f"{number}. {step}")
 
     st.image(
         photo["gif_bytes"],

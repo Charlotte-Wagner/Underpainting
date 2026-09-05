@@ -10,6 +10,7 @@ one Claude Design project:
 | File | What it is |
 | --- | --- |
 | `flower-logo-primary.png` | The mark, 2229×2100, transparent background. Use this one unless there's a reason not to. |
+| `flower-logo-web.png` | The mark trimmed to the artwork and reduced to 260×247. This is the one the app actually loads, for the header and the favicon. The primary is 1.4MB, which is the wrong thing to send a phone for a 46px logo. |
 | `flower-logo-conic.png` | Gradient variant — full spectrum, the same fill as the primary. |
 | `flower-logo-linear.png` | Gradient variant — green/yellow, top-left to bottom-right. |
 | `flower-logo-pastel.png` | Gradient variant — muted, lower saturation. |

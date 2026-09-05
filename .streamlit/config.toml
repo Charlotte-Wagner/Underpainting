@@ -1,0 +1,41 @@
+# The whole visual identity of the app, in one file.
+#
+# WHY A THEME FILE AND ALMOST NO CSS
+# Everything here is a setting Streamlit supports natively, which is the point rather
+# than a limitation accepted reluctantly. Injected CSS has to name Streamlit's own
+# generated class names, and those are not part of its public API: they change between
+# releases, silently, and the page they were styling is on Streamlit Cloud where the
+# upgrade is not ours to schedule. A theme file cannot break that way. If a future
+# change genuinely needs CSS, the tradeoff above is the thing to weigh, not a rule
+# against it.
+#
+# The palette is "Gesso", chosen in S18 from three directions. The mark is a
+# full-spectrum flower, warm across two thirds of it, so the interface stays close to
+# neutral and spends its one accent on a cold blue. That blue is not borrowed from
+# nowhere: it is sampled from the mark's own blue petal, so the page and the logo agree.
+[theme]
+base = "light"
+
+backgroundColor = "#FAF9F6"
+secondaryBackgroundColor = "#F1F0EC"
+
+# Near-black rather than black, biased very slightly blue to sit with the accent.
+textColor = "#181A20"
+
+# Sampled from the logo. Streamlit uses primaryColor for the primary button, the
+# focus ring, the spinner, and the file uploader's drag state, so this one value is
+# most of what a visitor reads as "the app has a color".
+primaryColor = "#3D6BD6"
+linkColor = "#3D6BD6"
+
+borderColor = "#DCDAD3"
+baseRadius = "medium"
+
+# Loaded from Google Fonts by URL, which Streamlit supports directly, so no
+# [[theme.fontFaces]] block and no self-hosted font files. The trailing "sans-serif"
+# is a real fallback: if the request to Google is blocked or slow the page renders in
+# the system stack rather than in nothing.
+#
+# One family at several weights, on purpose. A page whose subject is color should not
+# also be making an argument with two competing typefaces.
+font = "Libre Franklin:https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700&display=swap, sans-serif"
