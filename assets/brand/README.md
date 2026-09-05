@@ -14,7 +14,7 @@ one Claude Design project:
 | `flower-logo-linear.png` | Gradient variant — green/yellow, top-left to bottom-right. |
 | `flower-logo-pastel.png` | Gradient variant — muted, lower saturation. |
 | `flower-logo-radial.png` | Gradient variant — warm, orange/red from the centre out. |
-| `flower-logo-v2-chalk.pdf` | The two-page sheet everything else was cut from. Page 2 also carries size tests on light and dark grounds, and a wordmark lockup. **Untracked** — see below. |
+| `flower-logo-v2-chalk.pdf` | The two-page sheet everything else was cut from. Page 2 also carries size tests on light and dark grounds, and a wordmark lockup. |
 
 The mark is a five-petal flower with a heavy chalk-textured black outline, a gradient
 fill, and a knocked-out white centre. The design sheet names it "primary mark — crayon
@@ -34,17 +34,13 @@ these assets were recovered from a PDF export instead. If the logo ever needs a 
 change — different colours, a redrawn petal, an SVG for the web build — go back to the
 Design project rather than editing a PNG.
 
-## Why the PDF isn't tracked
+## Why the PDF is tracked, when no other one is
 
 `.gitignore` excludes `*.pdf` deliberately, and that rule carries a comment explaining
-the reasoning: no PDF has ever belonged in this repository's tracked files, and a broad
-pattern beats a filename list nobody remembers to update.
+the reasoning: a planning PDF sitting in the repo root is one `git add .` away from a
+public commit, and a broad pattern beats a filename list nobody remembers to update.
 
-That rule still stands here, so `flower-logo-v2-chalk.pdf` sits in this folder locally
-but does not go to GitHub. The PNGs beside it are tracked and carry the same artwork, so
-nothing is lost to anyone cloning the repo — they just don't get the wordmark lockup and
-the on-dark size tests, which live only on page 2 of the PDF.
-
-If those are worth having in the repo, the fix is a narrow exception
-(`!assets/brand/*.pdf`) rather than loosening the rule — but that's a deliberate change
-to a deliberate policy, not a default.
+This folder is a scoped exception (`!assets/brand/*.pdf`) because brand source isn't
+working notes, and because page 2 — the wordmark lockup and the on-dark size tests —
+has no equivalent among the PNGs. The exception is one directory wide, so the original
+rule's actual concern is still caught everywhere else.
