@@ -31,11 +31,16 @@ MAX_SOURCE_PIXELS = 50_000_000
 
 # The floor is about the pipeline being asked something meaningless. It crashes below
 # six pixels, because extract_palette cannot find PALETTE_SIZE clusters in fewer samples
-# than that, and it raises a ValueError nothing upstream was catching. Six is the crash;
-# 64 is a judgment call about where output stops being worth showing. A 16x16 favicon
-# runs the whole pipeline and produces a palette of single pixels and a line drawing of
-# noise. One constant, easy to move, and nothing below it was ever useful.
-MIN_SOURCE_DIMENSION = 64
+# than that, and it raises a ValueError nothing upstream was catching. Six is the crash.
+#
+# 32 is a judgment call about where output stops being worth showing, and it is hers: S19
+# proposed 64 and she chose 32, which admits things like a 32x32 icon on the grounds that
+# refusing a real if tiny picture is the worse of the two errors. Nothing between 32 and
+# 64 breaks: every shape in that band was run through the whole pipeline before the floor
+# was lowered into it, including lopsided ones whose short edge collapses to one pixel.
+# Below 32 the outputs stop meaning anything well before they stop existing, which is why
+# there is a floor above the crash point at all rather than a guard at six.
+MIN_SOURCE_DIMENSION = 32
 
 
 class UnusableImageSize(ValueError):

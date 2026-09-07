@@ -78,10 +78,12 @@ rule("4. load_rgb: EXIF rotation is actually applied")
 # Same synthetic-sideways-photo check as S3, run through the new shared
 # function instead of app.py's inline steps.
 #
-# 80x40 rather than the 40x20 this used through S19, because load_rgb now refuses
-# anything under MIN_SOURCE_DIMENSION on its longest side. Verified by mutation
-# that the size is incidental: with exif_transpose removed, the shape assertion
-# below fails at 40x20 and at 80x40 alike.
+# 80x40 rather than the 40x20 this used through S19, because load_rgb gained a
+# minimum-dimension floor that the old fixture sat under at the time. That floor
+# has since been lowered to 32, so 40x20 would be legal again; the larger fixture
+# stays because it is clear of the floor wherever the floor ends up, and because
+# mutation showed the size is incidental anyway. With exif_transpose removed, the
+# shape assertion below fails at 40x20 and at 80x40 alike.
 base = Image.new("RGB", (80, 40), (10, 10, 10))
 base.putpixel((0, 0), (250, 0, 0))  # distinct marker in the top-left corner
 exif = base.getexif()
