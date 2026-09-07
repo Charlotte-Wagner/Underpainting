@@ -517,7 +517,20 @@ def show_stage_wizard(stages, palette, slices, hint):
     """
     step = st.session_state.stage_step
 
-    st.caption(f"Step {step + 1} of {len(STAGE_CAPTIONS)}")
+    # (step + 1) / four rather than step / three: the bar reads as how much of the
+    # build is behind you, so the first stage is a quarter done and the last is full.
+    # step / three would show an empty bar on the drawing, which is the stage a
+    # visitor is most likely to be looking at when they wonder how long this is.
+    #
+    # st.progress carries its own label, so this is one element where the caption was
+    # one element rather than a bar added above it. Not free, though: measured at a
+    # 375px viewport the progress block is 33px against the caption's single line, so
+    # it costs about ten. Cheap, not nothing, and worth saying because the palette
+    # panel below it is budgeted to the pixel for the same screen.
+    st.progress(
+        (step + 1) / len(STAGE_CAPTIONS),
+        text=f"Step {step + 1} of {len(STAGE_CAPTIONS)}",
+    )
     st.image(stages[step], caption=STAGE_CAPTIONS[step])
 
     # Back and Next sit directly under the image rather than under the text, because
@@ -631,28 +644,39 @@ def show_tutorial_screen(photo):
     # every click after the first, which is a true number about the wrong thing.
     st.caption(f"Processed in {photo['seconds']:.2f}s")
 
+    # Stretched, because at its natural width the GIF landed at about half the
+    # column with nothing beside it, on the one screen where it is the thing worth
+    # looking at. Every other image here is either full width or half of a matched
+    # pair, so natural width made the centerpiece the smallest element on the page.
     st.image(
         photo["gif_bytes"],
         caption="All four stages in one loop, before stepping through them.",
+        width="stretch",
     )
 
-    st.caption(
-        "Optional. Sends this photo, plus its measured value range and dominant "
-        "temperature, to Claude for a written guide, one part beside each stage. "
-        "This is the only thing in the app that calls a model."
-    )
-    if st.button("Generate step-by-step guide"):
-        with st.spinner("Writing the guide..."):
-            _generate_and_store_guide(st.session_state.image_bytes)
+    # Boxed, because this is the one optional thing on a screen that is otherwise a
+    # sequence, and in a flat stack it read as the next step rather than an aside.
+    # The border is st.container's own, so it takes borderColor from the theme file
+    # and needs no CSS. It also keeps the button with the caption that explains what
+    # the button spends, and with whatever notice comes back from pressing it.
+    with st.container(border=True):
+        st.caption(
+            "Optional. Sends this photo, plus its measured value range and dominant "
+            "temperature, to Claude for a written guide, one part beside each stage. "
+            "This is the only thing in the app that calls a model."
+        )
+        if st.button("Generate step-by-step guide"):
+            with st.spinner("Writing the guide..."):
+                _generate_and_store_guide(st.session_state.image_bytes)
 
-    guide = current_guide()
-    if guide is not None:
-        show_guide_notice(guide)
-        if guide["text"]:
-            st.caption(
-                "Written. It is split across the four stages, so it appears as you "
-                "step through them."
-            )
+        guide = current_guide()
+        if guide is not None:
+            show_guide_notice(guide)
+            if guide["text"]:
+                st.caption(
+                    "Written. It is split across the four stages, so it appears as "
+                    "you step through them."
+                )
 
     back_column, start_column = st.columns(2)
     with back_column:
