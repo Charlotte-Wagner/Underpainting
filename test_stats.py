@@ -79,9 +79,9 @@ rule("4. load_rgb: EXIF rotation is actually applied")
 # function instead of app.py's inline steps.
 #
 # 80x40 rather than the 40x20 this used through S19, because load_rgb now refuses
-# anything under MIN_SOURCE_DIMENSION on its longest side. The size was always
-# incidental here: what is being checked is that the orientation tag swaps the axes
-# and moves the marker pixel, and both assertions below are unchanged.
+# anything under MIN_SOURCE_DIMENSION on its longest side. Verified by mutation
+# that the size is incidental: with exif_transpose removed, the shape assertion
+# below fails at 40x20 and at 80x40 alike.
 base = Image.new("RGB", (80, 40), (10, 10, 10))
 base.putpixel((0, 0), (250, 0, 0))  # distinct marker in the top-left corner
 exif = base.getexif()
@@ -93,8 +93,49 @@ rotated = load_rgb(buf.getvalue(), max_dimension=1200)
 plain = np.array(base)  # no exif applied, for comparison
 print(f"  no-rotation shape: {plain.shape}   load_rgb shape: {rotated.shape}")
 assert rotated.shape[:2] != plain.shape[:2], "orientation tag 6 should swap width/height"
-assert tuple(rotated[0, 0]) != (250, 0, 0), "top-left marker pixel should have moved"
-print("PASS: load_rgb applies EXIF rotation, same check S3 did by hand")
+
+
+def corner_redness(image, corner, size=3):
+    """How far the red channel leads the other two, averaged over a corner patch.
+
+    A patch rather than the single marker pixel, and a comparison rather than an
+    equality test, because the fixture is a JPEG. Lossy compression smears one
+    bright pixel on a flat ground across its whole 8x8 block: the marker is
+    written as (250, 0, 0) and comes back around (31, 11, 17). Any assertion
+    naming the exact value is therefore true no matter what rotation happened,
+    which is precisely how the check this replaced managed to never fail.
+    """
+    rows = slice(0, size) if corner[0] == "top" else slice(-size, None)
+    cols = slice(0, size) if corner[1] == "left" else slice(-size, None)
+    patch = image[rows, cols].reshape(-1, 3).astype(float)
+    return float(np.mean(patch[:, 0] - (patch[:, 1] + patch[:, 2]) / 2.0))
+
+
+# Orientation 6 rotates 90 degrees clockwise, which sends the pixel at (0, 0) to
+# the top-right. Checking where the marker landed, rather than only that the axes
+# swapped, is what makes this catch a rotation applied in the wrong direction:
+# ROTATE_90 the other way also swaps the axes and passes the assertion above, but
+# puts the marker bottom-left.
+#
+# The suite was not blind to that case before, but only by accident: check 5's
+# fixture is non-square, so a wrong-direction rotation tripped its resize assertion
+# instead. A rotation bug reported as a resize failure, two sections below the check
+# named for rotation, is a worse way to find out.
+CORNERS = [("top", "left"), ("top", "right"), ("bottom", "left"), ("bottom", "right")]
+measured = {c: corner_redness(rotated, c) for c in CORNERS}
+for (vertical, horizontal), value in measured.items():
+    print(f"  {vertical + '-' + horizontal:<13} redness {value:+6.1f}")
+
+marker = max(measured, key=measured.get)
+runner_up = sorted(measured.values())[-2]
+assert marker == ("top", "right"), (
+    f"orientation 6 should put the marker top-right, found it {marker[0]}-{marker[1]}"
+)
+assert measured[marker] - runner_up > 5.0, (
+    "the marker corner should stand clearly above the rest, "
+    f"got {measured[marker]:.1f} against {runner_up:.1f}"
+)
+print("PASS: load_rgb applies EXIF rotation, and applies it in the right direction")
 
 rule("5. load_rgb: resizes down, never up")
 
