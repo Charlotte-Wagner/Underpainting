@@ -116,10 +116,14 @@ being that the lightest value lands on true white, not short of it (see
 ## Status
 
 **Working today:**
-- A four-screen flow rather than one scrolling page: a front page that only asks for a
-  photo, a tutorial screen, one screen per build stage, and the value studies at the
-  end. Streamlit has no router, so the current screen is a session-state value the
-  script branches on, and every way onto a screen is a button on the screen before it
+- A four-screen flow rather than one scrolling page: a front page that asks for a photo
+  and says in two lines what it will do with it, a tutorial screen, one screen per build
+  stage, and the value studies at the end. Streamlit has no router, so the current screen
+  is a session-state value the script branches on, and every way onto a screen is a
+  button on the screen before it
+- A designed interface rather than default Streamlit: the palette, type, and corner radii
+  are native theme settings in `.streamlit/config.toml`, with no injected CSS anywhere in
+  the app, so nothing in the look depends on Streamlit's private generated class names
 - Photo upload (JPEG, PNG, HEIC) with EXIF-safe rotation and resize to a 1200px max
   dimension, plus a one-click sample photo for visitors without one handy
 - A line drawing of the photo's biggest shapes: region outlines and contrast edges

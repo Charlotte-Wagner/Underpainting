@@ -45,10 +45,10 @@ jobs:
       # a badge red months later with nobody watching. v7 declares node24 itself.
       - uses: actions/checkout@v7
 
-      # 3.12 because that is what this actually ships on: the local venv is 3.12.10 and
-      # Streamlit Cloud runs 3.12. The devcontainer pins 3.11, which is a known and
-      # separate inconsistency; CI testing a version production does not use would be
-      # measuring the wrong thing.
+      # 3.12 because that is what this actually ships on: the local venv is 3.12.10,
+      # Streamlit Cloud runs 3.12, and the devcontainer pins 3.12. CI testing a version
+      # production does not use would be measuring the wrong thing. Those four agreeing
+      # is the property worth keeping; if one of them moves, this line moves with it.
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
