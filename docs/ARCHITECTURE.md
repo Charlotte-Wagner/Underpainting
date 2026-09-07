@@ -219,6 +219,34 @@ is not the largest thing on its own screen. So dithering stays on, which is S8's
 not a default nobody rechecked. Turning it off was measured too and recovers about a
 quarter of the size.
 
+**An upload is refused on its header, before anything is decoded.** `load_rgb` reads
+`Image.open(...).size`, which Pillow fills in from the header without allocating a pixel
+buffer, and raises `UnusableImageSize` from there. Placing that check after the decode
+would report the same error and prevent nothing, which is the entire point of it.
+
+The failure it prevents is not a malformed file. It is a valid one: Pillow's own
+decompression-bomb check raises only above *twice* its `MAX_IMAGE_PIXELS`, so a
+13300x13300 PNG sits just under the threshold, decodes without complaint, and took peak
+RSS to 932MiB when measured. That file is 0.16MB on disk. Streamlit Cloud's free tier has
+roughly 1GB, so a small upload nobody would look at twice is an out-of-memory kill of a
+public page. `MAX_SOURCE_PIXELS` is 50 million because the measured cost is about 3.5MiB
+of peak RSS per megapixel and 50MP still clears every phone camera on sale.
+
+There is a floor for a different reason. `extract_palette` cannot find `PALETTE_SIZE`
+clusters in fewer than six pixels and raises a `ValueError` saying so, and until S19
+nothing caught it: `prepare_photo` wraps only `load_rgb` in `UnreadableImage`, so a 2x2
+PNG decoded fine and then put a Python traceback on the page. Six is where it broke;
+`MIN_SOURCE_DIMENSION` is 64 because a 16x16 favicon runs the whole pipeline and produces
+a palette of single pixels.
+
+**Size failures and decode failures are two errors, not one.** `UnreadableImage` means
+the bytes are not an image and its message says to try a JPEG, PNG, or HEIC. That advice
+is actively wrong for someone whose JPEG is valid and merely enormous, so
+`UnusableImageSize` carries its own text naming the actual size and the actual limit, and
+`prepare_photo` re-raises it rather than flattening it into the decode error. The same
+reasoning that kept `UnreadableImage` from being a bare `except` around the whole
+pipeline applies one level down.
+
 **Palette matching runs in Lab space, not RGB.** RGB numeric distance doesn't track how
 different two colors *look*. Two pairs the same distance apart in RGB can be visually
 nothing alike. Lab is built so equal distances look equally different, which is the

@@ -77,7 +77,12 @@ rule("4. load_rgb: EXIF rotation is actually applied")
 
 # Same synthetic-sideways-photo check as S3, run through the new shared
 # function instead of app.py's inline steps.
-base = Image.new("RGB", (40, 20), (10, 10, 10))
+#
+# 80x40 rather than the 40x20 this used through S19, because load_rgb now refuses
+# anything under MIN_SOURCE_DIMENSION on its longest side. The size was always
+# incidental here: what is being checked is that the orientation tag swaps the axes
+# and moves the marker pixel, and both assertions below are unchanged.
+base = Image.new("RGB", (80, 40), (10, 10, 10))
 base.putpixel((0, 0), (250, 0, 0))  # distinct marker in the top-left corner
 exif = base.getexif()
 exif[0x0112] = 6  # orientation tag: rotate 90 CW to display correctly

@@ -15,6 +15,37 @@ PALETTE_SIZE = 6
 PALETTE_SAMPLE_PX = 200
 KMEANS_SEED = 0
 
+# What load_rgb refuses before it decodes anything. Both numbers are measured, and
+# both guard a failure that a decodable, perfectly valid image file can cause.
+#
+# The ceiling is about memory, not speed. Pillow's own decompression-bomb check only
+# raises above twice its MAX_IMAGE_PIXELS, which is 178,956,970, so an image just under
+# that sails through it: a 13300x13300 PNG is 0.16MB on disk, decodes fine, and took
+# peak RSS to 932MiB on this laptop. Streamlit Cloud's free tier has about 1GB, so that
+# one small upload is an out-of-memory kill of a public page. Measured cost is roughly
+# 3.5MiB of peak RSS per megapixel: 49M pixels reached 356MiB, 80M reached 529MiB, 144M
+# reached 759MiB. 50M is the line because it leaves real headroom on a 1GB container and
+# still clears every phone camera, which currently top out at 48MP. A 61MP full-frame
+# DSLR file is over it and gets told to resize, which is a trade made on purpose.
+MAX_SOURCE_PIXELS = 50_000_000
+
+# The floor is about the pipeline being asked something meaningless. It crashes below
+# six pixels, because extract_palette cannot find PALETTE_SIZE clusters in fewer samples
+# than that, and it raises a ValueError nothing upstream was catching. Six is the crash;
+# 64 is a judgment call about where output stops being worth showing. A 16x16 favicon
+# runs the whole pipeline and produces a palette of single pixels and a line drawing of
+# noise. One constant, easy to move, and nothing below it was ever useful.
+MIN_SOURCE_DIMENSION = 64
+
+
+class UnusableImageSize(ValueError):
+    """The file decodes, but its dimensions are ones this app should refuse.
+
+    Deliberately not the same failure as "these bytes are not an image". app.py shows
+    this exception's own message, because "try a JPEG, PNG, or HEIC photo" is unhelpful
+    advice to someone whose JPEG is perfectly valid and merely enormous.
+    """
+
 
 def load_rgb(image_bytes, max_dimension):
     """Decode raw image bytes into an EXIF-corrected, resized, uint8 sRGB array.
@@ -32,10 +63,33 @@ def load_rgb(image_bytes, max_dimension):
         image_bytes: raw bytes of an uploaded image file.
         max_dimension: long-edge cap in pixels.
 
+    Raises:
+        UnusableImageSize: the file decodes but its dimensions are refused. Checked
+            against the header before anything is decoded, which is the entire point:
+            the cost being avoided is the allocation, so a guard placed after the
+            decode would run too late to prevent it.
+
     Returns:
         uint8 sRGB array (H, W, 3).
     """
     image = Image.open(BytesIO(image_bytes))
+
+    # Image.open parses the header and does not decode, so image.size is known here
+    # while the pixel buffer still does not exist. Every line below this allocates.
+    width, height = image.size
+    if width * height > MAX_SOURCE_PIXELS:
+        raise UnusableImageSize(
+            "That image is %.0f megapixels, which is larger than this app will open "
+            "(%.0f is the limit). Try exporting it at a smaller size."
+            % (width * height / 1e6, MAX_SOURCE_PIXELS / 1e6)
+        )
+    if max(width, height) < MIN_SOURCE_DIMENSION:
+        raise UnusableImageSize(
+            "That image is only %dx%d pixels, which is too small to build a study "
+            "from. Try one at least %d pixels on its longest side."
+            % (width, height, MIN_SOURCE_DIMENSION)
+        )
+
     image = ImageOps.exif_transpose(image)
     image = image.convert("RGB")
     image.thumbnail((max_dimension, max_dimension))
