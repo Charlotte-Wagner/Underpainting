@@ -1,7 +1,15 @@
 {
   "name": "Python 3",
   // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  //
+  // 3.12 because that is the version this project actually runs on everywhere else:
+  // the local venv is 3.12.10, .github/workflows/checks.yml pins 3.12, and Streamlit
+  // Cloud serves the deployed app on 3.12. This file said 3.11 only because it is the
+  // default Codespaces template, which is a reason nobody chose. A container testing a
+  // version production does not use can pass while production breaks, which is the
+  // whole failure this line exists to avoid. Not 3.13, which exists: matching
+  // production is the point, not being current.
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
   "customizations": {
     "codespaces": {
       "openFiles": [
