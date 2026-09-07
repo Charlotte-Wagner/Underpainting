@@ -236,8 +236,12 @@ There is a floor for a different reason. `extract_palette` cannot find `PALETTE_
 clusters in fewer than six pixels and raises a `ValueError` saying so, and until S19
 nothing caught it: `prepare_photo` wraps only `load_rgb` in `UnreadableImage`, so a 2x2
 PNG decoded fine and then put a Python traceback on the page. Six is where it broke;
-`MIN_SOURCE_DIMENSION` is 64 because a 16x16 favicon runs the whole pipeline and produces
-a palette of single pixels.
+`MIN_SOURCE_DIMENSION` is 32, which is a judgment rather than a measurement: it is the
+point where the outputs stop being worth showing, not the point where they stop existing.
+It was proposed at 64 and set to 32 by her, on the grounds that turning away a real if
+tiny picture is the worse of the two mistakes. The band it opened was checked rather than
+assumed, every shape from 32x32 to 63x63 through the full pipeline before the floor moved
+into it.
 
 **Size failures and decode failures are two errors, not one.** `UnreadableImage` means
 the bytes are not an image and its message says to try a JPEG, PNG, or HEIC. That advice

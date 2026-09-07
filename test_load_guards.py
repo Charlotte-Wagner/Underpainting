@@ -82,7 +82,10 @@ rule("3. The floor, which is where the pipeline used to raise an unhandled error
 # extract_palette needs PALETTE_SIZE samples and raises below that. Before this
 # guard existed the ValueError escaped prepare_photo's UnreadableImage handler,
 # so a 2x2 PNG put a Python traceback on a public page.
-for width, height in [(1, 1), (2, 2), (16, 16), (MIN_SOURCE_DIMENSION - 1,) * 2]:
+# Derived from the constant, not hardcoded, so lowering the floor again cannot
+# leave this asserting that a size the app now accepts is refused.
+for width, height in [(1, 1), (2, 2), (MIN_SOURCE_DIMENSION // 2,) * 2,
+                      (MIN_SOURCE_DIMENSION - 1,) * 2]:
     try:
         load_rgb(png_bytes(width, height), MAX_DIMENSION)
     except UnusableImageSize as e:
