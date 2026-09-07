@@ -15,6 +15,9 @@ from an oversight.
 - `docs/` — architecture and design notes, kept short on purpose.
 - `.streamlit/secrets.toml` — local-only, gitignored, never committed. `.env.example`
   documents the variable name it needs without containing a real value.
+- `.streamlit/config.toml` — the app's entire visual identity as native theme settings.
+  Committed, unlike `secrets.toml` beside it: it holds no secret, and the deployed app
+  reads it.
 
 ## Conventions
 
@@ -26,6 +29,12 @@ from an oversight.
 - **The Anthropic call is always gated behind an explicit user action.** Never call the
   model automatically on upload or rerun — Streamlit reruns the whole script on every
   interaction, so "automatic" means "unbounded spend on a public page."
+- **The look lives in the theme file, not in injected CSS.** Styling that names
+  Streamlit's generated class names depends on private API, on a Streamlit Cloud
+  deployment whose upgrades are not ours to schedule, and it breaks silently rather than
+  loudly. Check `config._config_options_template` for a native setting before concluding
+  something needs CSS; `theme.*` is much larger than it looks. This is a default to argue
+  against with a specific case, not an absolute like the secrets rule below it.
 - **Secrets never go in code, ever, not even temporarily to test something.** Read them
   from `st.secrets`. If a real key ever ends up in a commit, it's compromised the moment
   it's pushed — rotate it at the provider, deleting the file afterward is not sufficient.

@@ -24,6 +24,11 @@ this file ever outlives the code, that's a bug in the file.
 - **`.streamlit/secrets.toml`** (local) / **Streamlit Cloud Secrets** (deployed): where
   the Anthropic API key lives. Never in code, never in git. `app.py` reads it once via
   `st.secrets["ANTHROPIC_API_KEY"]`.
+- **`.streamlit/config.toml`**: the entire visual identity, as native Streamlit theme
+  settings and no CSS. Injected CSS has to name Streamlit's generated class names, which
+  are not a public API and change between releases, on a deployment whose upgrades are
+  not ours to schedule; a theme file cannot break that way. Committed, unlike
+  `secrets.toml` beside it, because it holds no secret and the deployed app needs it.
 - **`gif.py`**: Encodes the four build stages into a looping GIF. Kept out of
   `imaging.py` because its output is GIF bytes through Pillow, not a numpy array back
   out; same standard otherwise, zero Streamlit imports.
@@ -45,9 +50,12 @@ this file ever outlives the code, that's a bug in the file.
   are not all there in order, which is what lets `app.py` fall back to showing the guide
   whole instead of showing it with holes in it.
 - **`assets/`**: The committed sample photo the "Try a sample photo" button loads, and
-  the build-order GIF used in the README. Both are the same Dead Vlei photograph, which
-  is third-party CC BY-SA 4.0 material rather than project code; see the README for
-  attribution.
+  the build-order GIF used in the README. Those two are the same Dead Vlei photograph,
+  which is third-party CC BY-SA 4.0 material rather than project code; see the README for
+  attribution. `assets/brand/` is the separate case: the logo files are this project's
+  own work under the repository's own license, so nothing in there carries the photo's
+  ShareAlike terms. `app.py` loads exactly one of them, the 260px web copy, which is both
+  the header mark and the favicon.
 
 ## Data flow
 
@@ -196,11 +204,20 @@ Floyd-Steinberg more near-neighbors to dither between and dithered flat areas co
 worse: the sample photo's GIF went from 86KB to 212KB.
 
 That was checked against the thing S8 actually cared about, a phone on cell data, rather
-than accepted or refused on the number alone. Measured on the loaded page, the animation
-is 207KB of 1,719KB of images, 12% of what the page ships, and the original photo alone is
-505KB. S8's concern was a 1.1MB animation that was the dominant asset; 212KB is not. So
-dithering stays on, which is S8's decision, not a default nobody rechecked. Turning it off
-was measured too and recovers about a quarter of the size.
+than accepted or refused on the number alone. Re-measured in S19 on the tutorial screen,
+which is the only screen the animation appears on: it is 207KiB of the 836KiB of images
+that screen ships, so about a quarter of them, and the original photo alone is 505KiB.
+That is the same file as the 212KB above, counted in KiB rather than decimal kB, which is
+why one number is smaller than the other.
+
+The share is larger than the 12% this file recorded through S18, and nothing about the GIF
+changed to make it so. S14 did: replacing four stage panels in a row with one stage per
+screen deleted most of the page the animation used to be a small fraction of. The
+conclusion never rested on the percentage, so it survives intact. S8's concern was a 1.1MB
+animation that was the dominant asset, and at 207KiB against a 505KiB photo the animation
+is not the largest thing on its own screen. So dithering stays on, which is S8's decision,
+not a default nobody rechecked. Turning it off was measured too and recovers about a
+quarter of the size.
 
 **Palette matching runs in Lab space, not RGB.** RGB numeric distance doesn't track how
 different two colors *look*. Two pairs the same distance apart in RGB can be visually
