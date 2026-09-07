@@ -10,8 +10,10 @@ staring at a photo who don't know what order to build it in.
 **Live app:** [underpainting-o8cslvzblappesmjatdqgru.streamlit.app](https://underpainting-o8cslvzblappesmjatdqgru.streamlit.app)
 
 Free-tier apps sleep after a period of inactivity, so a cold visit may show a wake-up
-screen for the first 30 seconds or so. Here's the build-order output on the app's own
-sample photo, so the repo tells the story even while it's waking up:
+screen for the first 30 seconds or so. Here's the app itself, and the build-order output
+on its own sample photo, so the repo tells the story even while it's waking up:
+
+![The Underpainting front page: the flower logo above the wordmark on a warm off-white ground, a one-line description, a file uploader with a tip about high contrast and simple shapes, a short paragraph explaining what the app produces, and a blue "Try a sample photo" button.](assets/screenshot-front-page.png)
 
 ![The four build stages of a desert photo cross-fading into each other on a toned gray ground: a line drawing of the tree and the dune ridge, then the darkest and lightest bands filled in with a 6-swatch palette, then the midtones added, then the full photo.](assets/sample-output.gif)
 
