@@ -87,11 +87,13 @@ python test_stats.py       # value range and dominant temperature measurement
 python test_demo_writeup.py  # the saved fallback guide still matches the rubric and photo
 python test_guide.py       # splitting the written guide into one slice per stage,
                            #   including that no text is dropped when it can't
+python test_load_guards.py # the upload size guards, including that the large one
+                           #   refuses before decoding rather than after
 ```
 
 Each prints its own checks and ends with `ALL CHECKS PASSED`.
 
-[GitHub Actions](.github/workflows/checks.yml) runs all nine on every push and pull
+[GitHub Actions](.github/workflows/checks.yml) runs all ten on every push and pull
 request, one step per script so a failure names itself without opening a log. They need
 no API key: the workflow runs against a plain checkout with no `.streamlit/secrets.toml`,
 which is checked rather than assumed, and is the reason none of these scripts is allowed
@@ -149,7 +151,7 @@ being that the lightest value lands on true white, not short of it (see
 - A demo-mode fallback: if that API call fails, the sample photo falls back to a saved
   guide generated earlier from the same photo and the same rubric, labeled on screen as
   saved rather than live, so the page stays complete when the key or the balance is not
-- Nine check scripts covering the math above (see
+- Ten check scripts covering the math above (see
   [Running the checks](#running-the-checks)), all passing, and run automatically by
   GitHub Actions on every push and pull request
 - Dev Container config for GitHub Codespaces

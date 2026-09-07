@@ -17,6 +17,7 @@ from gif import encode_gif, frame_durations
 from guide import split_guide
 from imaging import (
     STAGE_CAPTIONS,
+    UnusableImageSize,
     build_stages,
     cross_fade_frames,
     dominant_temperature,
@@ -198,6 +199,10 @@ def prepare_photo(image_bytes, max_dimension):
 
     try:
         rgb = load_rgb(image_bytes, max_dimension)
+    except UnusableImageSize:
+        # Decodable, and refused for its size. It carries its own message and must not
+        # be rewritten into "these bytes are not an image", which would be false.
+        raise
     except Exception as e:
         raise UnreadableImage from e
 
@@ -854,6 +859,11 @@ def _adopt_photo(image_bytes, source_caption, from_sample):
         st.session_state.upload_error = (
             "Couldn't read that file as an image. Try a JPEG, PNG, or HEIC photo."
         )
+        return
+    except UnusableImageSize as e:
+        # The exception's own text, because it names the actual size and the actual
+        # limit, and a visitor who cannot see either has nothing to act on.
+        st.session_state.upload_error = str(e)
         return
 
     photo_key = hashlib.sha256(image_bytes).hexdigest()
