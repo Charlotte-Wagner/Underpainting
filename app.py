@@ -587,18 +587,25 @@ def show_upload_screen():
     if st.session_state.upload_error:
         st.error(st.session_state.upload_error)
 
+    # Directly under the uploader, which is her call as of S18. It reads to whoever is
+    # still deciding whether to hand over a photo at all, and that decision happens at
+    # the uploader rather than four elements below the sample button.
+    #
+    # After the tip and not before it: the tip is advice about what to feed the control
+    # immediately above it, so it belongs to the uploader, and splitting the two with a
+    # paragraph about the app would leave the tip orphaned.
+    #
+    # No divider any more. It was there to separate the explanation from the actions
+    # when it sat at the bottom. Here it would cut the front page's one action cluster
+    # in half, which is a line drawn through the thing it is meant to be explaining.
+    for paragraph in FRONT_PAGE_BLURB:
+        st.caption(paragraph)
+
     st.caption("No photo handy?")
     # Primary for the same reason "Let's start!" is: it is the forward action, here for
     # the visitor who arrived without a photo. It is also the only accent-colored thing
     # on the front page, since the uploader's own button is Streamlit's and not ours.
     st.button("Try a sample photo", on_click=_use_sample_photo, type="primary")
-
-    # Below both ways in rather than above them. The one action on this screen stays
-    # the first thing under the title; the explanation is for the visitor who did not
-    # already know what they came for, and it costs the visitor who did nothing.
-    st.divider()
-    for paragraph in FRONT_PAGE_BLURB:
-        st.caption(paragraph)
 
 
 def show_tutorial_screen(photo):
