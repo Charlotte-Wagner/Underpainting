@@ -1,4 +1,4 @@
-# Runs the ten check scripts on every push and pull request.
+# Runs the eleven check scripts on every push and pull request.
 #
 # WHY THIS EXISTS
 # The scripts have always existed and have always passed; what was missing is anything
@@ -13,7 +13,7 @@
 # line per script and nothing else.
 #
 # No secrets. Verified before this was written, by extracting a bare checkout of the
-# tracked files with `git archive HEAD` and running all ten there: they pass with no
+# tracked files with `git archive HEAD` and running all eleven there: they pass with no
 # .streamlit/secrets.toml and no gitignored files present. That is a property worth
 # keeping. A check that needs the API key would put the key in CI, and the one rule in
 # CLAUDE.md with no exceptions is that the key never leaves st.secrets.
@@ -101,3 +101,10 @@ jobs:
       - name: Upload size guards, enforced before the image is decoded
         if: ${{ !cancelled() }}
         run: python test_load_guards.py
+
+      # Last because it is the only one that imports app.py for its handlers rather
+      # than a module for its maths, so a failure here is about the UI's error paths
+      # and not about the image pipeline every check above it covers.
+      - name: Model call failures end in a notice rather than a traceback
+        if: ${{ !cancelled() }}
+        run: python test_api_failures.py
