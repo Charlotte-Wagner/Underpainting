@@ -10,6 +10,7 @@ import numpy as np
 import pillow_heif
 import streamlit as st
 from PIL import Image
+from streamlit.errors import StreamlitSecretNotFoundError
 
 import demo_writeup
 import rubric
@@ -229,6 +230,36 @@ def prepare_photo(image_bytes, max_dimension):
     }
 
 
+class EmptyModelReply(Exception):
+    """The call came back with a 200 and nothing to put on the page.
+
+    Its own exception rather than a None threaded through the caller, because the
+    call site already reads as a list of the ways this can fail and this is one
+    more of them. Raised, not returned, so it cannot be mistaken for a guide.
+    """
+
+
+def configured_api_key():
+    """The API key, or None when nothing usable is configured.
+
+    Three different absences all mean one thing to a visitor and all used to reach
+    them as a traceback: no secrets file at all, which raises
+    StreamlitSecretNotFoundError and prints filesystem paths on the way out; a
+    secrets file that does not contain this key, which raises KeyError; and a key
+    present but blank, which gets as far as the client constructor and dies there
+    complaining about authentication methods.
+
+    Checked here rather than left to the SDK because demo mode exists for exactly
+    this case. Deleting the secret is the intended way to watch the fallback work,
+    so the app has to survive its own absence.
+    """
+    try:
+        key = st.secrets["ANTHROPIC_API_KEY"]
+    except (StreamlitSecretNotFoundError, KeyError):
+        return None
+    return str(key).strip() or None
+
+
 @st.cache_data(show_spinner=False)
 def generate_writeup(image_bytes, rubric_version, model):
     """Photo + measured stats + rubric -> written step-by-step guide.
@@ -283,7 +314,16 @@ def generate_writeup(image_bytes, rubric_version, model):
             ],
         }],
     )
-    return next(block.text for block in response.content if block.type == "text")
+    text = next(
+        (block.text for block in response.content if block.type == "text"), None
+    )
+    # next() with no default raised StopIteration here, which is not an anthropic
+    # exception and so reached the visitor as a traceback. A reply carrying no text
+    # block is not a bug in this app and does not deserve a stack trace: an empty
+    # content list and a reply that is all non-text blocks both land here.
+    if not text or not text.strip():
+        raise EmptyModelReply("the reply carried no text")
+    return text
 
 
 def saved_guide_or_error(image_bytes, short_reason, error_message):
@@ -805,7 +845,25 @@ def current_guide():
 
 
 def _generate_and_store_guide(image_bytes):
-    """The one model call, and every way it is allowed to fail."""
+    """The one model call, and every way it is allowed to fail.
+
+    Every branch below ends in demo mode or an honest message, and that is the
+    property worth keeping rather than the particular list. Anything that reaches
+    a visitor as a Python traceback is a bug in this function: the guide is the
+    optional part of the page, so a failed call should cost a visitor a notice and
+    nothing else.
+    """
+    # Before the call, because a missing key cannot produce an anthropic exception:
+    # it fails inside st.secrets or inside the client constructor, neither of which
+    # any handler below can see.
+    if configured_api_key() is None:
+        store_guide(saved_guide_or_error(
+            image_bytes,
+            "no API key is configured",
+            "No API key is configured. Add ANTHROPIC_API_KEY to the app's secrets.",
+        ))
+        return
+
     try:
         writeup = generate_writeup(image_bytes, RUBRIC_VERSION, MODEL_NAME)
     # AuthenticationError stays first: it subclasses APIStatusError, so the
@@ -828,6 +886,22 @@ def _generate_and_store_guide(image_bytes):
             image_bytes,
             "the API couldn't be reached",
             "Couldn't reach the API. Check your internet connection.",
+        ))
+    except EmptyModelReply:
+        store_guide(saved_guide_or_error(
+            image_bytes,
+            "the API returned an empty reply",
+            "The API replied with no text. Try the button again.",
+        ))
+    # Last, and deliberately the SDK's own base class rather than Exception: it
+    # catches the siblings of the three handlers above without also swallowing a
+    # bug in this app's own code. APIResponseValidationError is the one that
+    # reaches here today, from a 200 whose body does not match the schema.
+    except anthropic.APIError as e:
+        store_guide(saved_guide_or_error(
+            image_bytes,
+            "the API's reply could not be read",
+            f"Unexpected API error: {e}",
         ))
     else:
         store_guide({
