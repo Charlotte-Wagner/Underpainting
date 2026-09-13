@@ -89,11 +89,13 @@ python test_guide.py       # splitting the written guide into one slice per stag
                            #   including that no text is dropped when it can't
 python test_load_guards.py # the upload size guards, including that the large one
                            #   refuses before decoding rather than after
+python test_api_failures.py  # every way the model call can fail, and that each one
+                           #   ends in a notice rather than a traceback
 ```
 
 Each prints its own checks and ends with `ALL CHECKS PASSED`.
 
-[GitHub Actions](.github/workflows/checks.yml) runs all ten on every push and pull
+[GitHub Actions](.github/workflows/checks.yml) runs all eleven on every push and pull
 request, one step per script so a failure names itself without opening a log. They need
 no API key: the workflow runs against a plain checkout with no `.streamlit/secrets.toml`,
 which is checked rather than assumed, and is the reason none of these scripts is allowed

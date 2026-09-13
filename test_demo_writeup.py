@@ -6,9 +6,10 @@ Checks the two ways a saved guide goes quietly wrong: the rubric moves and the g
 doesn't, or the sample photo is swapped and the guide keeps describing the old one.
 Neither shows up as an error at runtime, which is exactly why they're asserted here.
 
-Whether the fallback actually fires is not checkable from a terminal, because it needs a
-failed API call and a browser. That was tested by breaking the key on purpose and clicking
-the button; see the S11 entry in debug-log.md.
+Whether the fallback actually fires is checked by test_api_failures.py, which drives
+app.py's real handlers with the call replaced by one that fails in a named way. That
+was believed to need a browser and does not. What still needs a browser is watching it
+happen on the deployed app; see the S11 entry in debug-log.md.
 """
 
 import logging

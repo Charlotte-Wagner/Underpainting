@@ -278,6 +278,25 @@ pointer at the sample. And the saved guide records the rubric version it came fr
 bumped `RUBRIC_VERSION` with a stale saved guide fails `test_demo_writeup.py` and changes
 the on-screen note, rather than quietly teaching a rubric the app no longer sends.
 
+**"When the API call raises" had to be made true, and was not.** The sentence above
+describes the intent, and five failures used to walk past every handler and reach the
+visitor as a Python traceback. Three of them are the plain absence of a key: no
+secrets file at all raises `StreamlitSecretNotFoundError` from inside `st.secrets` and
+prints filesystem paths on its way out, a secrets file missing this one key raises
+`KeyError`, and a key present but blank gets as far as the SDK's client constructor and
+dies there. None of those is an `anthropic` exception, so no `except anthropic.*`
+clause could ever see them. That is the case demo mode exists for and the case anyone
+deliberately deleting the secret to watch the fallback would hit first, so the key is
+now read through `configured_api_key` and checked before the call rather than around
+it. The other two came back from a successful request: a 200 whose body fails the SDK's
+schema check raises `APIResponseValidationError`, which descends from `APIError` and
+not from the `APIStatusError` the handler named, and a reply carrying no text block at
+all turned `next()` into a bare `StopIteration`. The handler list now ends at
+`anthropic.APIError`, the SDK's own base class, which covers its siblings without
+swallowing a bug in this app's code the way `except Exception` would.
+`test_api_failures.py` asserts that each of them ends in a notice, and each mutation
+that removes one of the guards makes it fail in its own section.
+
 **The written guide is split on the labels the prompt asked for, and shown whole when it
 can't be.** `rubric.OUTPUT_INSTRUCTIONS` asks for four steps headed by the exact
 `STAGE_CAPTIONS` strings, so the split is finding those four labels and cutting between
