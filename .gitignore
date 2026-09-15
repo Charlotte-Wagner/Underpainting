@@ -52,6 +52,15 @@ s[0-9]-handoff.md
 s[0-9][0-9]-brief.md
 s[0-9][0-9]-handoff.md
 
+# Interview-answer drafts and any other working draft dropped in the root. Same
+# reasoning as the block above, and the twelfth instance of the same failure: an
+# answer-2 draft was written into the repo root in S21 and was untracked, one
+# `git add .` from publishing interview prep in a public portfolio repo. The
+# finished answers live in debug-log.md, which is already ignored by name; a draft
+# beside it was not, purely because nobody had written this line yet.
+*-draft.md
+answer-[0-9]*.md
+
 # Design and planning documents dropped into the project folder while working.
 # Ignored by extension rather than by filename because the failure mode is a
 # file nobody remembered to list: "Website flow 2.pdf" sat untracked in the repo
