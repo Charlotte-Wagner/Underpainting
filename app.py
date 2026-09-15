@@ -129,16 +129,21 @@ API_MAX_TOKENS = 1500
 # already uploaded does not need to be told how to look at pictures.
 #
 # Every claim here is checkable against the code rather than aspirational: four stages
-# (imaging.STAGE_CAPTIONS), six palette colors with a tube name each
+# (imaging.STAGE_CAPTIONS), up to six palette colors with a tube name each
 # (imaging.PALETTE_SIZE, paints.nearest_paint), two value studies (COARSE_LEVELS and
 # FINE_LEVELS). Keep it that way when editing, per CLAUDE.md's rule about claims.
+#
+# "up to six" rather than "six" because extract_palette returns fewer when the photo
+# holds fewer distinguishable colors than that. Flat uploads are rare, the wording is
+# uglier, and it is still the only version of this sentence that is true for every
+# visitor rather than for most of them.
 #
 # The second paragraph is the only place in the app a visitor learns that the model
 # call is optional and never automatic, which is the decision this codebase is most
 # careful about and is otherwise invisible from the outside.
 FRONT_PAGE_BLURB = (
     "Underpainting reads your photo and builds the plan a painter would make from "
-    "it: the line drawing, four stages from darks to detail, the six colors that "
+    "it: the line drawing, four stages from darks to detail, up to six colors that "
     "cover most of the canvas with the closest tube name for each, and two value "
     "studies.",
     "All of that is computed on the spot. A written step-by-step from Claude is one "

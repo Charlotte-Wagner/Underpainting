@@ -15,6 +15,21 @@ PALETTE_SIZE = 6
 PALETTE_SAMPLE_PX = 200
 KMEANS_SEED = 0
 
+# How close two cluster centers have to be, in Delta E 76, before extract_palette
+# treats them as one color and merges them. Not a tunable: it is a fixed property of
+# the clustering, and there is no UI attached to it.
+#
+# 1.0 is chosen to sit well under the just-noticeable difference, usually put around
+# 2.3, so nothing a viewer could actually distinguish is ever merged. It only has to
+# be large enough to catch what this is for, and the gaps it is for are far smaller:
+# the duplicated centers on a solid-gray image differ by 0.015, and on a two-color
+# image by exactly 0. The margin is the half worth measuring rather than asserting:
+# the closest legitimate pair of swatches on the three test photos is Delta E 8.2
+# (portrait), 10.5 (interior) and 14.7 (dead vlei), so the nearest real photo sits
+# eight times the threshold away and all three palettes are byte-identical to what
+# they were before this merging existed.
+SWATCH_MERGE_DELTA_E = 1.0
+
 # What load_rgb refuses before it decodes anything. Both numbers are measured, and
 # both guard a failure that a decodable, perfectly valid image file can cause.
 #
@@ -240,7 +255,10 @@ def extract_palette(rgb, k=PALETTE_SIZE, sample_px=PALETTE_SAMPLE_PX, seed=KMEAN
         seed: RNG seed. Same seed and same image always gives the same result.
 
     Returns:
-        List of k dicts, ordered by share descending, each with:
+        List of at most k dicts, ordered by share descending. Fewer than k when the
+        image holds fewer distinguishable colors than that, which is the honest
+        answer for a flat or near-flat photo; never empty, since any image with at
+        least one pixel fills at least one cluster. Each dict has:
             "lab"   tuple of 3 floats, true CIE Lab. Use this for paint matching.
             "rgb"   tuple of 3 ints 0-255, for display.
             "hex"   "#rrggbb" string.
@@ -271,6 +289,39 @@ def extract_palette(rgb, k=PALETTE_SIZE, sample_px=PALETTE_SAMPLE_PX, seed=KMEAN
     # clusters with identical pixel counts could swap places between runs even
     # with the RNG seeded. Same class of bug, one layer down.
     order = np.argsort(-counts, kind="stable")
+
+    # Merge centers that are the same color, which is how k-means reports an image
+    # holding fewer distinguishable colors than k. A flat wall came back as six
+    # swatches with the identical hex on all six, and the palette panel rendered
+    # every one of them as a separate tube to go buy. Nothing raised. The output was
+    # simply wrong, in a way only a painter reading it would have caught.
+    #
+    # The surplus clusters are not empty, which is the part worth writing down,
+    # because the obvious guard is to drop clusters with no pixels and that guard
+    # does nothing here. OpenCV fills an otherwise-empty cluster by reassigning one
+    # arbitrary pixel to it: on solid gray the counts are 39995, 1, 1, 1, 1, 1, and
+    # on a two-color image they are 19998, 19998, 1, 1, 1, 1. Every count is above
+    # zero. What is actually duplicated is the center.
+    #
+    # So the test is distance between centers, not population. Merging below the
+    # threshold is also what this panel already claims to do: it says the clusters
+    # match colors a painter would mix as one, and two swatches a painter cannot
+    # tell apart are one color whatever k-means called them.
+    kept = []
+    for index in order:
+        center = centers[index]
+        duplicate_of = None
+        for position, kept_index in enumerate(kept):
+            if np.linalg.norm(center - centers[kept_index]) < SWATCH_MERGE_DELTA_E:
+                duplicate_of = position
+                break
+        if duplicate_of is None:
+            kept.append(index)
+        else:
+            # Fold the pixels into the swatch this one duplicates rather than
+            # discarding them, so the shares still add up to the whole image.
+            counts[kept[duplicate_of]] += counts[index]
+    order = kept
 
     total = float(labels.size)
     swatches = []
@@ -639,7 +690,8 @@ def line_drawing(rgb, palette, edge_min_length=LINE_EDGE_MIN_LENGTH,
 # approximation into the next one, and the last stage would drift off the
 # actual photo instead of being it.
 #
-# Stages 2 and 3 paint with the same six swatches the palette panel shows,
+# Stages 2 and 3 paint with the same swatches the palette panel shows, six for
+# an ordinary photo and fewer for one too flat to fill six clusters,
 # so the filmstrip stays tied to the palette rather than being an unrelated
 # output that happens to sit near it.
 # --------------------------------------------------------------------------

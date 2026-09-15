@@ -8,7 +8,14 @@ photo on disk. Asserts, so a wrong answer fails loudly.
 
 import numpy as np
 
-from imaging import PALETTE_SIZE, downsample, extract_palette, lab_to_srgb, srgb_to_lab
+from imaging import (
+    PALETTE_SIZE,
+    SWATCH_MERGE_DELTA_E,
+    downsample,
+    extract_palette,
+    lab_to_srgb,
+    srgb_to_lab,
+)
 
 
 def rule(title):
@@ -223,6 +230,90 @@ for shape, expected_long in [((3000, 4000), 200), ((150, 90), 150), ((200, 200),
     print(f"  {shape} -> {out.shape[:2]}")
     assert max(out.shape[:2]) == expected_long, f"{shape} became {out.shape[:2]}"
 print("PASS: large images shrink to 200, small images are left alone")
+
+
+# --------------------------------------------------------------------------
+rule("8. A photo with fewer than k colors returns fewer than k swatches")
+
+# Why this rule exists. k-means is asked for PALETTE_SIZE clusters whatever the
+# image holds, so an image with one color still comes back with six centers, five
+# of them duplicates of the first. The palette panel rendered every one of those as
+# a separate swatch with its own tube name, which told a painter to go buy six tubes
+# of the same paint. Nothing raised, so no other check here would ever have noticed.
+#
+# The obvious guard, dropping clusters with no pixels, does not work and this is the
+# check that would have caught that too. OpenCV reassigns one arbitrary pixel to an
+# otherwise-empty cluster, so the counts on solid gray are 39995, 1, 1, 1, 1, 1 and
+# every one of them is above zero. What repeats is the center, not the population.
+
+FLAT_CASES = [
+    ("solid mid-gray", np.full((200, 200, 3), 128, dtype=np.uint8), 1),
+    ("solid white", np.full((200, 200, 3), 255, dtype=np.uint8), 1),
+    ("solid black", np.zeros((200, 200, 3), dtype=np.uint8), 1),
+]
+
+two_tone = np.zeros((200, 200, 3), dtype=np.uint8)
+two_tone[:, 100:] = 255
+FLAT_CASES.append(("black and white halves", two_tone, 2))
+
+three_tone = np.zeros((200, 200, 3), dtype=np.uint8)
+three_tone[:, :66] = (200, 30, 30)
+three_tone[:, 66:133] = (30, 200, 30)
+three_tone[:, 133:] = (30, 30, 200)
+FLAT_CASES.append(("three flat colors", three_tone, 3))
+
+for name, image, expected in FLAT_CASES:
+    palette = extract_palette(image)
+    hexes = [swatch["hex"] for swatch in palette]
+    total_share = sum(swatch["share"] for swatch in palette)
+    print(f"  {name:<24} -> {len(palette)} swatch(es) {hexes}")
+    assert len(palette) == expected, (
+        f"{name} has {expected} color(s) but the palette came back with "
+        f"{len(palette)} swatches: {hexes}"
+    )
+    assert len(set(hexes)) == len(hexes), f"{name} returned a duplicate swatch: {hexes}"
+    # The merged pixels are folded into the swatch they duplicate, not discarded,
+    # so the panel's coverage percentages still describe the whole image.
+    assert abs(total_share - 1.0) < 1e-6, (
+        f"{name} shares sum to {total_share}, so merging dropped pixels instead "
+        "of folding them into the swatch they belong to"
+    )
+print("PASS: a flat image reports the colors it actually has, with shares summing to 1")
+
+
+# --------------------------------------------------------------------------
+rule("9. An ordinary photo is untouched by the merging")
+
+# The discriminating half of rule 8, and the one that matters more. A merge
+# threshold set too high would quietly collapse real swatches on real photographs,
+# and every assertion in rule 8 would still pass while the app got worse. This
+# builds a gradient whose six clusters are far apart, asserts all six survive, and
+# prints the closest pair so the margin is visible rather than asserted.
+
+ramp = np.zeros((240, 240, 3), dtype=np.uint8)
+for column in range(240):
+    ramp[:, column] = (column, 255 - column, (column * 7) % 256)
+
+ramp_palette = extract_palette(ramp)
+labs = [np.array(swatch["lab"]) for swatch in ramp_palette]
+closest = min(
+    float(np.linalg.norm(labs[i] - labs[j]))
+    for i in range(len(labs))
+    for j in range(i + 1, len(labs))
+)
+print(f"  {len(ramp_palette)} swatches, closest pair is Delta E {closest:.1f}")
+print(f"  merge threshold is Delta E {SWATCH_MERGE_DELTA_E}")
+assert len(ramp_palette) == PALETTE_SIZE, (
+    f"a full-color gradient lost swatches to merging: got {len(ramp_palette)}, "
+    f"expected {PALETTE_SIZE}"
+)
+assert closest > SWATCH_MERGE_DELTA_E * 5, (
+    f"the closest pair is only Delta E {closest:.1f} against a threshold of "
+    f"{SWATCH_MERGE_DELTA_E}, which is too little margin for this check to prove "
+    "that real photos are safe from the merging"
+)
+print("PASS: six distinct colors stay six, with the closest pair far above the threshold")
+
 
 print()
 print(f"ALL CHECKS PASSED  (k={PALETTE_SIZE})")

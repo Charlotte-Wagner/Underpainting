@@ -76,7 +76,7 @@ image, never chained off each other:
    rubric → one Anthropic API call → written step-by-step
 
 Path 3's stages depend on path 2's palette: the drawing outlines the shapes the palette
-clusters define, and stages 2 and 3 paint with the palette's own six colors. That is the
+clusters define, and stages 2 and 3 paint with the palette's own colors. That is the
 one place the four paths touch, and it is deliberate. The filmstrip showing colors the
 swatch panel does not is the version where the two outputs look unrelated.
 
@@ -231,6 +231,19 @@ RSS to 932MiB when measured. That file is 0.16MB on disk. Streamlit Cloud's free
 roughly 1GB, so a small upload nobody would look at twice is an out-of-memory kill of a
 public page. `MAX_SOURCE_PIXELS` is 50 million because the measured cost is about 3.5MiB
 of peak RSS per megapixel and 50MP still clears every phone camera on sale.
+
+`PALETTE_SIZE` is a ceiling, not a count. k-means returns k centers whatever the image
+holds, so an image with fewer distinguishable colors than k comes back with duplicates:
+on solid gray, all six centers are the same color. `extract_palette` merges centers
+closer together than `SWATCH_MERGE_DELTA_E` (1.0, well under the ~2.3 just-noticeable
+difference) and folds their pixels into the swatch they duplicate, so a flat photo
+reports the colors it actually has and the coverage shares still sum to 1.
+
+The guard that does not work here is dropping clusters with no pixels, which is the
+first thing to reach for and is why this paragraph exists. OpenCV reassigns one
+arbitrary pixel to an otherwise-empty cluster, so the counts on solid gray are
+39995, 1, 1, 1, 1, 1 and none of them is zero. What repeats is the center, not the
+population. `test_palette.py` rule 8 fails against that guard specifically.
 
 There is a floor for a different reason. `extract_palette` cannot find `PALETTE_SIZE`
 clusters in fewer than six pixels and raises a `ValueError` saying so, and until S19

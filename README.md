@@ -135,7 +135,7 @@ being that the lightest value lands on true white, not short of it (see
   so what survives is structure rather than texture
 - Value study: posterize to 3 and 5 tonal levels, endpoints anchored at true black and
   true white, shown as a tool for checking your own block-in rather than a stage to copy
-- Palette extraction: k-means clustering in Lab color space, 6 swatches sorted by how
+- Palette extraction: k-means clustering in Lab color space, up to 6 swatches sorted by how
   much of the canvas each covers, each matched to the nearest tube in a measured-Lab
   paint reference, kept on screen under every build stage as a mixing reference
 - The four build-order stages on a toned ground, in the order a painter works: the
