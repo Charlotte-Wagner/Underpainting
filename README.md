@@ -153,7 +153,7 @@ being that the lightest value lands on true white, not short of it (see
 - A demo-mode fallback: if that API call fails, the sample photo falls back to a saved
   guide generated earlier from the same photo and the same rubric, labeled on screen as
   saved rather than live, so the page stays complete when the key or the balance is not
-- Ten check scripts covering the math above (see
+- Eleven check scripts covering the math above (see
   [Running the checks](#running-the-checks)), all passing, and run automatically by
   GitHub Actions on every push and pull request
 - Dev Container config for GitHub Codespaces
