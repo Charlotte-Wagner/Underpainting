@@ -146,8 +146,8 @@ FRONT_PAGE_BLURB = (
     "it: the line drawing, four stages from darks to detail, up to six colors that "
     "cover most of the canvas with the closest tube name for each, and two value "
     "studies.",
-    "All of that is computed on the spot. A written step-by-step from Claude is one "
-    "optional click.",
+    "All of that is computed on the spot, and comes with a written step-by-step: "
+    "saved for the sample photo, written by Claude for one you upload.",
 )
 
 # Bump this by hand whenever the prompt text changes. It's part of the cache
@@ -331,6 +331,31 @@ def generate_writeup(image_bytes, rubric_version, model):
     return text
 
 
+def saved_guide_provenance():
+    """The line under a saved guide naming what wrote it, and whether it has gone stale.
+
+    Same staleness problem the cache key guards against, one layer up: a guide written
+    under one rubric and served under a later one is a guide for advice the app no longer
+    gives. Still shown, because a stale guide beats a red error box, but never shown as if
+    it were current. test_demo_writeup.py fails on the same mismatch, so the usual way to
+    find out is by running the checks, not by a visitor reading it.
+
+    Shared by the two callers that can put saved text on the page -- the fallback after a
+    failed call, and the sample photo's default -- because the provenance of the saved
+    file does not depend on which of them asked for it.
+    """
+    provenance = (
+        f"Written by {demo_writeup.MODEL} on {demo_writeup.GENERATED_ON} from this same "
+        f"photo, using the same rubric and the same measured stats the live call sends."
+    )
+    if demo_writeup.RUBRIC_VERSION != RUBRIC_VERSION:
+        provenance += (
+            f" Saved under rubric {demo_writeup.RUBRIC_VERSION}; the app now runs rubric "
+            f"{RUBRIC_VERSION}, so parts of it may not match the current rubric."
+        )
+    return provenance
+
+
 def saved_guide_or_error(image_bytes, short_reason, error_message):
     """Demo mode: the saved guide when the live call fails, or an honest error.
 
@@ -375,21 +400,6 @@ def saved_guide_or_error(image_bytes, short_reason, error_message):
             ),
         }
 
-    # Same staleness problem the cache key guards against, one layer up: a guide written
-    # under one rubric and served under a later one is a guide for advice the app no
-    # longer gives. Still shown, because a stale guide beats a red error box, but never
-    # shown as if it were current. test_demo_writeup.py fails on the same mismatch, so the
-    # usual way to find out is by running the checks, not by a visitor reading it.
-    provenance = (
-        f"Written by {demo_writeup.MODEL} on {demo_writeup.GENERATED_ON} from this same "
-        f"photo, using the same rubric and the same measured stats the live call sends."
-    )
-    if demo_writeup.RUBRIC_VERSION != RUBRIC_VERSION:
-        provenance += (
-            f" Saved under rubric {demo_writeup.RUBRIC_VERSION}; the app now runs rubric "
-            f"{RUBRIC_VERSION}, so parts of it may not match the current rubric."
-        )
-
     return {
         "text": demo_writeup.WRITEUP,
         "notice": (
@@ -398,7 +408,44 @@ def saved_guide_or_error(image_bytes, short_reason, error_message):
             "else on this page was still computed live from the photo."
         ),
         "notice_kind": "info",
-        "caption": provenance,
+        "caption": saved_guide_provenance(),
+    }
+
+
+def saved_guide_for_sample(image_bytes):
+    """The saved guide, shown for the sample photo because it is the default there.
+
+    The sample is the path most visitors take and the one photo whose guide is already
+    written and committed, so serving that saved copy on "Let's start!" puts the writing
+    in front of every visitor for nothing. That is what makes an automatic guide
+    affordable on a public page at all: the live call is kept for a photo somebody
+    actually chose to upload, and a visitor who only clicks the sample button costs the
+    app no model call at all.
+
+    Deliberately a separate function from saved_guide_or_error even though both end at
+    the same saved text. That one exists because a call failed and its notice says so;
+    this one is not a fallback and must not claim an outage that never happened. Keeping
+    them apart is also what keeps that function's "only reachable from a failed call"
+    property true, which test_api_failures.py leans on when it parses the failure reason
+    back out of the notice.
+
+    Returns:
+        A guide dict in the shape described at store_guide, or None when the bytes on
+        screen are not the sample after all -- the hash is the authority here, not the
+        session flag, for the same reason saved_guide_or_error checks it.
+    """
+    if not demo_writeup.matches_sample(image_bytes):
+        return None
+
+    return {
+        "text": demo_writeup.WRITEUP,
+        "notice": (
+            "This is the guide saved for the sample photo, written earlier from this "
+            "same photo and the same rubric, so stepping through it costs no model "
+            "call. Upload your own photo to have one written live."
+        ),
+        "notice_kind": "info",
+        "caption": saved_guide_provenance(),
     }
 
 
@@ -536,7 +583,7 @@ def show_palette_reference(palette):
         )
 
 
-def show_stage_wizard(stages, palette, slices, hint):
+def show_stage_wizard(stages, palette, slices):
     """The build order one stage at a time, instead of four panels in a row.
 
     Both controls set state through on_click callbacks rather than by assigning inside
@@ -563,7 +610,6 @@ def show_stage_wizard(stages, palette, slices, hint):
         palette: the swatch dicts, passed straight through to show_palette_reference.
         slices: one guide slice per stage, or None when there is no guide to show or it
             could not be split. Never a partially filled list; see guide.split_guide.
-        hint: a short line to show under the panel when there is no slice, or None.
     """
     step = st.session_state.stage_step
 
@@ -600,8 +646,6 @@ def show_stage_wizard(stages, palette, slices, hint):
 
     if slices is not None:
         st.markdown(slices[step])
-    elif hint:
-        st.caption(hint)
 
     # Last, so it sits under the whole step rather than between the picture and the
     # writing about it. The outline's wording is "right below the painting steps on
@@ -711,29 +755,22 @@ def show_tutorial_screen(photo):
         width="stretch",
     )
 
-    # Boxed, because this is the one optional thing on a screen that is otherwise a
-    # sequence, and in a flat stack it read as the next step rather than an aside.
-    # The border is st.container's own, so it takes borderColor from the theme file
-    # and needs no CSS. It also keeps the button with the caption that explains what
-    # the button spends, and with whatever notice comes back from pressing it.
-    with st.container(border=True):
-        st.caption(
-            "Optional. Sends this photo, plus its measured value range and dominant "
-            "temperature, to Claude for a written guide, one part beside each stage. "
-            "This is the only thing in the app that calls a model."
+    # The guide used to be a second button in a box of its own, pressed before this one.
+    # It was optional, it was easy to miss, and the most common outcome was a visitor
+    # stepping through all four stages without ever seeing the one part of the app that
+    # calls a model. Folding it into the forward button fixes that; what makes it
+    # affordable is that the two photos pay differently, which is what this caption says
+    # out loud rather than surprising anyone with a spend.
+    st.caption(
+        "Stepping through comes with the written guide, one part beside each stage. "
+        + (
+            "The sample photo uses a guide saved earlier, so it needs no model call."
+            if st.session_state.use_sample
+            else "Your photo is sent to Claude, with its measured value range and "
+                 "dominant temperature, to have one written now. This is the only "
+                 "thing in the app that calls a model."
         )
-        if st.button("Generate step-by-step guide"):
-            with st.spinner("Writing the guide..."):
-                _generate_and_store_guide(st.session_state.image_bytes)
-
-        guide = current_guide()
-        if guide is not None:
-            show_guide_notice(guide)
-            if guide["text"]:
-                st.caption(
-                    "Written. It is split across the four stages, so it appears as "
-                    "you step through them."
-                )
+    )
 
     back_column, start_column = st.columns(2)
     with back_column:
@@ -741,13 +778,13 @@ def show_tutorial_screen(photo):
             "Back", on_click=_go_to, args=("upload",), width="stretch"
         )
     with start_column:
-        st.button(
-            "Let's start!",
-            on_click=_go_to,
-            args=("stages",),
-            type="primary",
-            width="stretch",
-        )
+        # A plain button rather than an on_click callback, unlike Back beside it: the
+        # work has to happen while this screen is still drawn, so the spinner has
+        # somewhere to appear. A callback runs before the rerun that would show it.
+        if st.button("Let's start!", type="primary", width="stretch"):
+            _prepare_guide(st.session_state.image_bytes)
+            _go_to("stages")
+            st.rerun()
 
     if st.session_state.use_sample:
         st.caption(SAMPLE_NOTICE)
@@ -776,15 +813,7 @@ def show_stages_screen(photo):
         if slices is None:
             unsplit = guide["text"]
 
-    show_stage_wizard(
-        photo["stages"],
-        photo["palette"],
-        slices,
-        hint=None if guide is not None else (
-            "Stepping through the stages does not need the guide. Generate it on "
-            "the previous screen if you want the writing beside each one."
-        ),
-    )
+    show_stage_wizard(photo["stages"], photo["palette"], slices)
 
     if unsplit is not None:
         st.caption(
@@ -847,6 +876,38 @@ def current_guide():
     if guide is None or st.session_state.guide_photo != st.session_state.photo_key:
         return None
     return guide
+
+
+def _prepare_guide(image_bytes):
+    """Put a guide in hand for "Let's start!", by the cheapest honest route.
+
+    The sample photo takes the saved copy and never calls the model; anything a visitor
+    uploaded gets the live call. That split is the whole reason the guide could stop
+    being a separate opt-in button: the path a casual visitor takes is free, so only a
+    deliberate upload spends anything.
+
+    Pressing the button again with a usable guide already stored does nothing. A guide
+    that came back with no text is the one case worth another attempt, because that is a
+    failure rather than an answer, and st.cache_data never caches a raised exception, so
+    the next press is a real retry instead of a replay of the same error. Repeats are
+    cheap regardless: generate_writeup is cached on the photo's own bytes, so a visitor
+    going Back and forward does not buy a second call.
+    """
+    existing = current_guide()
+    if existing is not None and existing["text"]:
+        return
+
+    if st.session_state.use_sample:
+        saved = saved_guide_for_sample(image_bytes)
+        if saved is not None:
+            store_guide(saved)
+            return
+
+    # Spinner only on this branch. The saved path returns from a module constant, and a
+    # spinner reading "Writing the guide" over that would be describing work the app is
+    # not doing, which is the same kind of untrue as the notice wording above it.
+    with st.spinner("Writing the guide..."):
+        _generate_and_store_guide(image_bytes)
 
 
 def _generate_and_store_guide(image_bytes):

@@ -10,7 +10,7 @@ this file ever outlives the code, that's a bug in the file.
   inputs, calls into `imaging.py` for the actual math, and displays results. Streamlit
   reruns this entire file top to bottom on every user interaction (button click, file
   upload). That's the framework's execution model, not a bug, and it's why the Anthropic
-  call is gated behind an explicit button instead of running automatically. It is also
+  call hangs off a button press rather than running on load or on any rerun. It is also
   the only file in the project allowed to import Streamlit, which is what keeps every
   other module checkable from a plain Python shell, and the reason all four screens
   live here rather than in a module each.
@@ -82,8 +82,9 @@ swatch panel does not is the version where the two outputs look unrelated.
 
 Paths 1 through 3 run automatically on load, all inside one `prepare_photo` cached on
 (image bytes, max dimension), so they run once per photo rather than once per rerun. Path
-4 runs only on an explicit button click, and its result is cached on (image bytes, rubric
-version, model). Path 4 is also the only one that can fail, since it is the only one that
+4 runs only on an explicit button click -- "Let's start!", and only for a photo somebody
+uploaded -- and its result is cached on (image bytes, rubric version, model). For the
+sample photo path 4 does not run at all: the guide is read from `demo_writeup.py`. Path 4 is also the only one that can fail, since it is the only one that
 leaves the machine, so it is the only one with a fallback: see demo mode below.
 
 ## Decisions that would be easy to get wrong
@@ -134,17 +135,27 @@ defaults rather than exposed as sliders. A slider quadruples the testing surface
 a visitor find the ugliest output the app can produce; a curated pair of studies is a
 better demo than a configurable one.
 
-**The model call is gated behind a button, never automatic.** Streamlit reruns the whole
-script on every interaction, so an automatic call on upload would mean an unauthenticated
+**The model call hangs off a button, never off a rerun.** Streamlit reruns the whole
+script on every interaction, so a call on load or on upload would mean an unauthenticated
 public page can trigger unbounded API spend. One click, one call.
+
+**Which photo pays is what lets the guide be automatic.** It used to be a second button,
+pressed before "Let's start!" and easy to skip, and the common outcome was a visitor
+stepping through all four stages without ever meeting the one part of the app that calls
+a model. It now rides on "Let's start!" -- but only for an uploaded photo. The sample is
+answered from the guide committed in `demo_writeup.py`, so the path a stranger following
+a link takes reaches the API exactly never, and the spend still needs somebody to care
+enough to upload their own reference. `test_guide_routing.py` asserts the strong form of
+that rule, "the sample never calls the model" rather than "usually doesn't", because the
+weak form is the one that reads fine on screen and arrives as a bill.
 
 That constraint is what shapes the step-at-a-time build order added in S14. The four
 stages used to be four panels in a row; they are now one panel with Back and Next, which
 turns a visit from near-zero clicks into four to seven, and every one of those clicks is a
 full rerun of this file. Three things follow, all of them measured rather than assumed.
 The call stays inside the button's own `if` body, so it fires on the click rerun and no
-other: instrumented across one Generate click and twenty navigation and photo-switch
-clicks, the API was called exactly once. The guide is held in session state rather than
+other: instrumented across one click and twenty navigation and photo-switch clicks, the
+API was called exactly once. The guide is held in session state rather than
 recomputed, because a button reports True for a single rerun and the guide would otherwise
 vanish on the visitor's next click. And the guide is stored beside a hash of the photo it
 was written from, so switching photos drops it instead of describing a dead tree beside
