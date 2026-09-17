@@ -86,6 +86,15 @@ print(f"  words: {len(demo_writeup.WRITEUP.split())}, subject terms found: "
 for term in subject_terms:
     assert term in words, f"the saved guide never mentions {term!r}, which is in the photo"
 assert len(demo_writeup.WRITEUP.split()) > 200, "the saved guide is too short to be a real reply"
+# The other end of the same measurement. rubric.py sets a hard ceiling of 400 words, and a
+# saved guide that sails past it is advertising a limit the app does not keep: the 2026-09-16
+# reply ran to 433 words of prose before the rule was tightened. Counted without the four
+# stage labels, because the prompt requires those verbatim and they are not the model's
+# word budget to spend.
+label_words = sum(len(caption.split()) for caption in STAGE_CAPTIONS)
+prose_words = len(demo_writeup.WRITEUP.split()) - label_words
+print(f"  saved guide: {prose_words} words of prose, plus {label_words} of stage labels")
+assert prose_words <= 400, f"the saved guide runs to {prose_words} words, over the 400 ceiling"
 # Asserted rather than trusted to the prompt: rubric.py asks the model for no em dashes,
 # but a request is not a guarantee, and this text is shown to every visitor who clicks the
 # sample. A reply that ignored the rule has to be regenerated, not edited, since the module
