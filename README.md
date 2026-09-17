@@ -91,11 +91,13 @@ python test_load_guards.py # the upload size guards, including that the large on
                            #   refuses before decoding rather than after
 python test_api_failures.py  # every way the model call can fail, and that each one
                            #   ends in a notice rather than a traceback
+python test_guide_routing.py # which photo pays: that the sample is answered from the
+                           #   saved file and never reaches the API, and an upload does
 ```
 
 Each prints its own checks and ends with `ALL CHECKS PASSED`.
 
-[GitHub Actions](.github/workflows/checks.yml) runs all eleven on every push and pull
+[GitHub Actions](.github/workflows/checks.yml) runs all twelve on every push and pull
 request, one step per script so a failure names itself without opening a log. They need
 no API key: the workflow runs against a plain checkout with no `.streamlit/secrets.toml`,
 which is checked rather than assumed, and is the reason none of these scripts is allowed
@@ -145,15 +147,19 @@ being that the lightest value lands on true white, not short of it (see
 - A step-at-a-time walkthrough of those four stages, with Back and Next, rather than all
   four at once: one stage per screen, its written instructions under it, and the whole
   photo pipeline cached so stepping does not recompute it
-- A written step-by-step guide from the Anthropic API, built from a hand-written
-  painting rubric plus this photo's own measured value range and temperature, gated
-  behind an explicit button so it never fires on upload or on a Back or Next click, and
-  cached so the same photo doesn't trigger a repeat call. It is split into one part per
-  stage, and shown whole if it ever comes back in a shape that can't be split
-- A demo-mode fallback: if that API call fails, the sample photo falls back to a saved
-  guide generated earlier from the same photo and the same rubric, labeled on screen as
-  saved rather than live, so the page stays complete when the key or the balance is not
-- Eleven check scripts covering the math above (see
+- A written step-by-step guide, carried by the same "Let's start!" button that opens the
+  stages, built from a hand-written painting rubric plus this photo's own measured value
+  range and temperature. It is split into one part per stage, and shown whole if it ever
+  comes back in a shape that can't be split
+- Which photo pays is the whole reason that guide can be automatic: the sample photo is
+  answered from a guide saved in this repository and never calls the model, so a visitor
+  who clicks the sample button costs nothing, while a photo somebody uploaded gets the
+  live call. It still never fires on upload or on a Back or Next click, and it's cached
+  on the photo's bytes so stepping back and forward doesn't buy a second call
+- A demo-mode fallback: if the live call fails, the sample photo falls back to that same
+  saved guide, labeled on screen as saved rather than live and naming the reason the call
+  didn't happen, so the page stays complete when the key or the balance is not
+- Twelve check scripts covering the math above (see
   [Running the checks](#running-the-checks)), all passing, and run automatically by
   GitHub Actions on every push and pull request
 - Dev Container config for GitHub Codespaces
