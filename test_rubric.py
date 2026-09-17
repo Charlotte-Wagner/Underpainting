@@ -62,6 +62,7 @@ rule("4. The rubric's own text is included whole, not summarized or truncated")
 
 prompt = build_prompt((0, 255), 0.0)
 assert RUBRIC.strip() in prompt, "the full rubric text must appear verbatim in the prompt"
+assert "Do not use em dashes" in prompt, "the em dash rule no longer reaches the model"
 print(f"  rubric length: {len(RUBRIC)} chars, fully present in a {len(prompt)} char prompt")
 print("PASS: rubric text is not summarized or altered on its way into the prompt")
 

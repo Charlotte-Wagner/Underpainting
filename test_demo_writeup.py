@@ -86,6 +86,11 @@ print(f"  words: {len(demo_writeup.WRITEUP.split())}, subject terms found: "
 for term in subject_terms:
     assert term in words, f"the saved guide never mentions {term!r}, which is in the photo"
 assert len(demo_writeup.WRITEUP.split()) > 200, "the saved guide is too short to be a real reply"
+# Asserted rather than trusted to the prompt: rubric.py asks the model for no em dashes,
+# but a request is not a guarantee, and this text is shown to every visitor who clicks the
+# sample. A reply that ignored the rule has to be regenerated, not edited, since the module
+# docstring's promise is that this is the model's text byte for byte.
+assert "\u2014" not in demo_writeup.WRITEUP, "the saved guide contains an em dash"
 print("PASS: names what's actually in the sample photo")
 
 print()

@@ -189,6 +189,13 @@ information.
 # thing this session is supposed to verify against, so the instruction to be specific has to
 # be explicit rather than implied.
 #
+# The em dash rule is here rather than in RUBRIC because it is about how the reply is
+# typed, not about how to paint, and RUBRIC is the teaching document. That split is also
+# what keeps it out of app.RUBRIC_VERSION's scope, which that constant's own comment
+# defines as rubric.RUBRIC plus imaging.STAGE_CAPTIONS: a punctuation rule does not make
+# the saved guide describe advice the app no longer gives, so it is not a reason to mark
+# demo_writeup.py stale.
+#
 # The no-preamble rule names canvas preparation specifically because the model mirrors the
 # rubric's own structure, and every step it writes has to have an image beside it. A
 # "Before starting" section is the one thing the rubric can teach that the filmstrip cannot
@@ -214,7 +221,9 @@ OUTPUT_INSTRUCTIONS = (
     "is a ceiling, not a target to pad toward. Being specific about this photo matters more "
     "than covering every point in the rubric, so choose the parts of the rubric that this "
     "particular image actually calls for and leave the rest out. Address the painter "
-    "directly and keep it practical."
+    "directly and keep it practical.\n\n"
+    "Do not use em dashes. Where you would reach for one, use a comma, a colon, a "
+    "semicolon, or start a new sentence."
 )
 
 
