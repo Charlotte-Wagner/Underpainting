@@ -189,6 +189,13 @@ information.
 # thing this session is supposed to verify against, so the instruction to be specific has to
 # be explicit rather than implied.
 #
+# The em dash rule is here rather than in RUBRIC because it is about how the reply is
+# typed, not about how to paint, and RUBRIC is the teaching document. That split is also
+# what keeps it out of app.RUBRIC_VERSION's scope, which that constant's own comment
+# defines as rubric.RUBRIC plus imaging.STAGE_CAPTIONS: a punctuation rule does not make
+# the saved guide describe advice the app no longer gives, so it is not a reason to mark
+# demo_writeup.py stale.
+#
 # The no-preamble rule names canvas preparation specifically because the model mirrors the
 # rubric's own structure, and every step it writes has to have an image beside it. A
 # "Before starting" section is the one thing the rubric can teach that the filmstrip cannot
@@ -211,10 +218,17 @@ OUTPUT_INSTRUCTIONS = (
     "inside the first step rather than in front of it. Do not add a closing summary after "
     "the last step.\n\n"
     "Hard limit of 400 words for the whole thing, which is about 100 words per step. This "
-    "is a ceiling, not a target to pad toward. Being specific about this photo matters more "
+    "is a hard ceiling, not a target to pad toward: count the words and come in under "
+    "it, cutting the least specific sentence first if you are close. Being specific about this photo matters more "
     "than covering every point in the rubric, so choose the parts of the rubric that this "
     "particular image actually calls for and leave the rest out. Address the painter "
-    "directly and keep it practical."
+    "directly and keep it practical.\n\n"
+    "Do not use em dashes. Where you would reach for one, use a comma, a colon, a "
+    "semicolon, or start a new sentence.\n\n"
+    "Check the image again before you state where something sits. Left and right, "
+    "above and below, nearer and further are claims about this photograph that a "
+    "reader will check against it, so describe the thing itself rather than guessing "
+    "at a position you are unsure of."
 )
 
 
