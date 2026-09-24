@@ -51,7 +51,7 @@ Measured on a real photo, matches ran dE 11.5 to 31.1. A per-item "approximate"
 flag at dE 12 would fire on nearly everything and therefore mean nothing, so
 there is no per-item threshold. The panel is framed once, as closest tube.
 
-Underpainting is independent and is not affiliated with or endorsed by Golden
+Underpaint is independent and is not affiliated with or endorsed by Golden
 Artist Colors or Williamsburg.
 """
 

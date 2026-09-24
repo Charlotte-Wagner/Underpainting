@@ -1,8 +1,8 @@
-# Underpainting
+# Underpaint
 
-[![checks](https://github.com/Charlotte-Wagner/Underpainting/actions/workflows/checks.yml/badge.svg)](https://github.com/Charlotte-Wagner/Underpainting/actions/workflows/checks.yml)
+[![checks](https://github.com/Charlotte-Wagner/Underpaint/actions/workflows/checks.yml/badge.svg)](https://github.com/Charlotte-Wagner/Underpaint/actions/workflows/checks.yml)
 
-Underpainting turns a reference photo into a set of study aids for representational
+Underpaint turns a reference photo into a set of study aids for representational
 painting: a simplified value study, a limited paint palette with real tube names, a
 staged build-order preview, and a written step-by-step. It's for painting students
 staring at a photo who don't know what order to build it in.
@@ -13,7 +13,7 @@ Free-tier apps sleep after a period of inactivity, so a cold visit may show a wa
 screen for the first 30 seconds or so. Here's the app itself, and the build-order output
 on its own sample photo, so the repo tells the story even while it's waking up:
 
-![The Underpainting front page: the flower logo above the wordmark on a warm off-white ground, a one-line description, a file uploader with a tip about high contrast and simple shapes, a short paragraph explaining what the app produces, and a blue "Try a sample photo" button.](assets/screenshot-front-page.png)
+![The Underpaint front page: the flower logo above the wordmark on a warm off-white ground, a one-line description, a file uploader with a tip about high contrast and simple shapes, a short paragraph explaining what the app produces, and a blue "Try a sample photo" button.](assets/screenshot-front-page.png)
 
 ![The four build stages of a desert photo cross-fading into each other on a toned gray ground: a line drawing of the tree and the dune ridge, then the darkest and lightest bands filled in with a 6-swatch palette, then the midtones added, then the full photo.](assets/sample-output.gif)
 
@@ -42,8 +42,8 @@ Starting from a fresh clone, on macOS/Linux (Windows notes inline):
 
 ```bash
 # 1. Clone and enter the project
-git clone https://github.com/Charlotte-Wagner/Underpainting.git
-cd Underpainting
+git clone https://github.com/Charlotte-Wagner/Underpaint.git
+cd Underpaint
 
 # 2. Create and activate a virtual environment
 #    (Python 3.12 recommended, matching the deployed environment; 3.10+ works)
@@ -197,7 +197,7 @@ ShareAlike: the repository is an aggregation, and the code is not an adaptation 
 photograph. Only material actually derived from the photo carries the license forward.
 
 **The paint reference data.** CIE Lab values in `paints.py` come from Golden Artist
-Colors' published measurements for Williamsburg oils, cited in that file. Underpainting is
+Colors' published measurements for Williamsburg oils, cited in that file. Underpaint is
 independent and is not affiliated with or endorsed by Golden Artist Colors or Williamsburg.
 
 **Photos you upload** are decoded in memory to render the page, and are sent to the

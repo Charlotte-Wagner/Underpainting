@@ -1,4 +1,4 @@
-"""Image math for Underpainting.
+"""Image math for Underpaint.
 
 Kept out of app.py on purpose: app.py runs Streamlit calls at import time, so
 importing it from a plain terminal script is awkward. Everything here is pure
@@ -370,7 +370,7 @@ def dominant_temperature(palette):
 STAGE_VALUE_LEVELS = 3
 
 # The toned canvas the first three stages sit on: a mid-value neutral, which
-# is the rubric's own first instruction, and the app is called Underpainting.
+# is the rubric's own first instruction, and the app is called Underpaint.
 # Not white, and this was measured rather than assumed. With white standing
 # for uncovered canvas, stage 2 of the sample photo came out 81% blank,
 # because the sky and the dune both land in the middle value band, and the
