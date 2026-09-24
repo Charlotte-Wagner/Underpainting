@@ -1,6 +1,6 @@
 # Conventions for this repo
 
-This file describes how Underpainting is built, for both future AI-assisted sessions and
+This file describes how Underpaint is built, for both future AI-assisted sessions and
 human reviewers. It records what's intentional so a reviewer can tell a deliberate choice
 from an oversight.
 

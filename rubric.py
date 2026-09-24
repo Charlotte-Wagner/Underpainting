@@ -1,4 +1,4 @@
-"""Teaching rubric for Underpainting's step-by-step writeup, and prompt assembly.
+"""Teaching rubric for Underpaint's step-by-step writeup, and prompt assembly.
 
 WHERE THIS CAME FROM
 ---------------------
@@ -28,7 +28,7 @@ Three changes are worth flagging here because they alter the method rather than 
     a default to test.
 
 Added because a beginner needs them and would not know to ask: toning the ground (the app is
-called Underpainting and v1 never mentioned it), hard versus soft edges, what squinting
+called Underpaint and v1 never mentioned it), hard versus soft edges, what squinting
 actually does, how the suggested tubes connect to the stages, and a stopping criterion.
 
 Structured in build order on purpose: the drawing, then darks and lights, then midtones, then

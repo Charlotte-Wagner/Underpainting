@@ -1,4 +1,4 @@
-"""GIF encoding for Underpainting's cross-fade build-order animation.
+"""GIF encoding for Underpaint's cross-fade build-order animation.
 
 Kept out of imaging.py because the output here is GIF bytes through Pillow,
 not a numpy array back out. Same standard as imaging.py otherwise: zero

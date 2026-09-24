@@ -1,6 +1,6 @@
 # Brand assets
 
-The flower mark is the primary logo for Underpainting. Everything here descends from
+The flower mark is the primary logo for Underpaint. Everything here descends from
 one Claude Design project:
 
 <https://claude.ai/design/p/579191b1-6c12-4a28-8800-d7d6e993d292>

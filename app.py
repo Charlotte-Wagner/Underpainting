@@ -39,7 +39,7 @@ BRAND_MARK_PATH = Path(__file__).parent / "assets" / "brand" / "flower-logo-web.
 # Has to run before any other st.* call; that is a Streamlit rule, not a preference.
 # The mark is the page icon because the browser tab is the one piece of the app a
 # visitor sees before anything has loaded.
-st.set_page_config(page_title="Underpainting", page_icon=str(BRAND_MARK_PATH))
+st.set_page_config(page_title="Underpaint", page_icon=str(BRAND_MARK_PATH))
 
 # On every screen, not just the front page. It is the only thing that says where
 # you are once the upload control is behind you, and there is no browser URL doing
@@ -48,7 +48,7 @@ st.set_page_config(page_title="Underpainting", page_icon=str(BRAND_MARK_PATH))
 # Mark above wordmark rather than beside it, because st.title's own line height
 # leaves no room to sit a 46px image next to it without fighting the baseline.
 st.image(str(BRAND_MARK_PATH), width=46)
-st.title("Underpainting")
+st.title("Underpaint")
 
 MAX_DIMENSION = 1200
 
@@ -142,7 +142,7 @@ API_MAX_TOKENS = 1500
 # call is optional and never automatic, which is the decision this codebase is most
 # careful about and is otherwise invisible from the outside.
 FRONT_PAGE_BLURB = (
-    "Underpainting reads your photo and builds the plan a painter would make from "
+    "Underpaint reads your photo and builds the plan a painter would make from "
     "it: the line drawing, four stages from darks to detail, up to six colors that "
     "cover most of the canvas with the closest tube name for each, and two value "
     "studies.",
@@ -563,7 +563,7 @@ def show_palette_reference(palette):
             "as one, ordered by how much of the canvas each covers. Each swatch "
             "shows the photo's own color, with the tube you would reach for to "
             "mix it.\n\n"
-            "Tube suggestions are approximate. Underpainting compares dominant "
+            "Tube suggestions are approximate. Underpaint compares dominant "
             "sRGB photo colors with measured wet-paint masstones from a limited "
             "reference palette. Camera processing, lighting, transparency, ground "
             "color, mixtures, and drying shifts are not modeled. Use these names "
@@ -578,7 +578,7 @@ def show_palette_reference(palette):
             "Munsell-and-CIELAB-Data-for-Williamsburg-Oils_munsell_ordering.pdf), "
             "measured from 6-mil wet drawdowns with a non-contact "
             "spectrophotometer. The published table does not specify its "
-            "illuminant/observer setting. Underpainting is independent and is not "
+            "illuminant/observer setting. Underpaint is independent and is not "
             "affiliated with or endorsed by Golden Artist Colors or Williamsburg."
         )
 
